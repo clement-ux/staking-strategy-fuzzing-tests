@@ -34,7 +34,11 @@ contract MockBeaconProofs {
         bytes calldata firstPendingDepositSlotProof
     ) external view { }
 
-    function verifyBlockNumber(bytes32 beaconBlockRoot, uint256 blockNumber, bytes calldata blockNumberProof) external view { }
+    function verifyBlockNumber(
+        bytes32 beaconBlockRoot,
+        uint256 blockNumber,
+        bytes calldata blockNumberProof
+    ) external view { }
 
     function verifySlot(bytes32 beaconBlockRoot, uint256 slot, bytes calldata slotProof) external view { }
 
