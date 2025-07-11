@@ -12,7 +12,7 @@ remappings = [
     "@solmate/=dependencies/solmate-6.8.0/src/",
     "@solady/=dependencies/solady-0.1.23/src/",
     "@origin-dollar/=dependencies/origin-dollar-1.0.0/contracts/contracts/",
-    "dependencies/origin-dollar-1.0.0/:@openzeppelin/contracts/=dependencies/openzeppelin-contracts-4.4.2-4.4.2/contracts/",
+    "@openzeppelin/contracts/=dependencies/openzeppelin-contracts-4.4.2-4.4.2/contracts/",
 ]
 
 [fmt]
