@@ -27,11 +27,17 @@ clean-all:
 	rm -f -r soldeer.lock
 
 # Testing Targets
+test-v%:
+	FOUNDRY_VERBOSITY=$* forge test --summary --detailed 
+
 test:
-	forge test --summary --detailed
+	$(MAKE) test-v3
+
+t-v%:
+	$(MAKE) test-v$*
 
 t: 
-	$(MAKE) test
+	$(MAKE) t-v3
 
 # Coverage
 coverage:
