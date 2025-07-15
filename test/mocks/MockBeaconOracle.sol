@@ -5,4 +5,8 @@ contract MockBeaconOracle {
     function slotToBlock(
         uint64 slot
     ) external view returns (uint64) { }
+
+    function slotToRoot(
+        uint64 slot
+    ) external view returns (bytes32) { }
 }

@@ -43,6 +43,11 @@ abstract contract Modifiers is Helpers {
         _;
     }
 
+    modifier verifyDeposit(bytes memory publicKey, uint256 index) {
+        _verifyDeposit(publicKey, index);
+        _;
+    }
+
     //////////////////////////////////////////////////////
     /// --- INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////
@@ -62,5 +67,10 @@ abstract contract Modifiers is Helpers {
     function _verifyValidator(bytes memory publicKey, uint64 validatorIndex) internal {
         strategy.verifyValidator(block.timestamp.toUint64(), validatorIndex, hashPubKey(publicKey), bytes(""));
         validatorCount++;
+    }
+
+    function _verifyDeposit(bytes memory publicKey, uint256 index) internal {
+        bytes32 depositDataRoot = getDepositDataRoots(publicKey, index);
+        strategy.verifyDeposit(depositDataRoot, uint64(block.number + 1), type(uint64).max, 0, bytes(""));
     }
 }
