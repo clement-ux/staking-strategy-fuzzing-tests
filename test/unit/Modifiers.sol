@@ -26,6 +26,13 @@ abstract contract Modifiers is Helpers {
         vm.stopPrank();
     }
 
+    modifier addSourceRegistry(
+        address sourceRegistry
+    ) {
+        _addSourceRegistry(sourceRegistry);
+        _;
+    }
+
     modifier registerValidator(
         bytes memory publicKey
     ) {
@@ -45,6 +52,15 @@ abstract contract Modifiers is Helpers {
 
     modifier verifyDeposit(bytes memory publicKey, uint256 index) {
         _verifyDeposit(publicKey, index);
+        _;
+    }
+
+    modifier requestConsolidation(
+        address consolidationSourceStrategy,
+        bytes32 lastPublicKeyHash,
+        bytes32 currentPublicKeyHash
+    ) {
+        _requestConsolidation(consolidationSourceStrategy, lastPublicKeyHash, currentPublicKeyHash);
         _;
     }
 
@@ -72,5 +88,25 @@ abstract contract Modifiers is Helpers {
     function _verifyDeposit(bytes memory publicKey, uint256 index) internal {
         bytes32 depositDataRoot = getDepositDataRoots(publicKey, index);
         strategy.verifyDeposit(depositDataRoot, uint64(block.number + 1), type(uint64).max, 0, bytes(""));
+    }
+
+    function _addSourceRegistry(
+        address sourceRegistry
+    ) internal {
+        strategy.addSourceStrategy(sourceRegistry);
+    }
+
+    function _requestConsolidation(
+        address consolidationSourceStrategy,
+        bytes32 lastPublicKeyHash,
+        bytes32 currentPublicKeyHash
+    ) internal {
+        address caller = msg.sender;
+        vm.stopPrank();
+
+        vm.prank(consolidationSourceStrategy);
+        strategy.requestConsolidation(lastPublicKeyHash, currentPublicKeyHash);
+
+        vm.startPrank(caller);
     }
 }
