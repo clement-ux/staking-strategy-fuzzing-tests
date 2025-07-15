@@ -2,6 +2,8 @@
 pragma solidity 0.8.29;
 
 contract MockSSVNetwork {
+    mapping(bytes => bool) public isRegisteredValidator;
+
     struct Cluster {
         uint32 validatorCount;
         uint64 networkFeeIndex;
@@ -11,12 +13,20 @@ contract MockSSVNetwork {
     }
 
     function registerValidator(
-        bytes calldata pubkey,
-        bytes calldata withdrawal_credentials,
-        bytes calldata signature,
-        bytes32 deposit_data_root
+        bytes calldata publicKey,
+        uint64[] calldata operatorIds,
+        bytes calldata sharesData,
+        uint256 amount,
+        Cluster memory cluster
     ) external {
         // Todo: Implement the logic for registering a validator
+        isRegisteredValidator[publicKey] = true;
+
+        // Silent unused variable warnings
+        operatorIds;
+        sharesData;
+        amount;
+        cluster;
     }
 
     function removeValidator(bytes memory publicKey, uint64[] memory operatorIds, Cluster memory cluster) external {
