@@ -20,6 +20,7 @@ import { MockBeaconRoots } from "test/mocks/MockBeaconRoots.sol";
 import { MockBeaconOracle } from "test/mocks/MockBeaconOracle.sol";
 import { MockBeaconProofs } from "test/mocks/MockBeaconProofs.sol";
 import { MockDepositContract } from "test/mocks/MockDepositContract.sol";
+import { MockBeaconRootAddress } from "test/mocks/MockBeaconRootAddress.sol";
 import { MockWithdrawalRequest } from "test/mocks/MockWithdrawalRequest.sol";
 import { MockConsolidationStrategy } from "test/mocks/MockConsolidationStrategy.sol";
 
@@ -90,8 +91,10 @@ abstract contract Setup is Base {
         mockBeaconOracle = new MockBeaconOracle();
         mockBeaconProofs = new MockBeaconProofs();
         mockDepositContract = new MockDepositContract();
+        mockBeaconRootAddress = new MockBeaconRootAddress();
         mockWithdrawalRequest = new MockWithdrawalRequest();
         mockConsolidationStrategy = new MockConsolidationStrategy();
+        vm.etch(0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02, address(mockBeaconRootAddress).code);
 
         // Mock as addresses
         vault = makeAddr("Vault");

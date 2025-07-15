@@ -19,6 +19,7 @@ import { MockBeaconRoots } from "test/mocks/MockBeaconRoots.sol";
 import { MockBeaconOracle } from "test/mocks/MockBeaconOracle.sol";
 import { MockBeaconProofs } from "test/mocks/MockBeaconProofs.sol";
 import { MockDepositContract } from "test/mocks/MockDepositContract.sol";
+import { MockBeaconRootAddress } from "test/mocks/MockBeaconRootAddress.sol";
 import { MockWithdrawalRequest } from "test/mocks/MockWithdrawalRequest.sol";
 import { MockConsolidationStrategy } from "test/mocks/MockConsolidationStrategy.sol";
 
@@ -46,6 +47,7 @@ abstract contract Base is Test {
     MockBeaconOracle public mockBeaconOracle;
     MockBeaconProofs public mockBeaconProofs;
     MockDepositContract public mockDepositContract;
+    MockBeaconRootAddress public mockBeaconRootAddress;
     MockWithdrawalRequest public mockWithdrawalRequest;
     MockConsolidationStrategy public mockConsolidationStrategy;
 
