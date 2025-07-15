@@ -138,7 +138,15 @@ contract StakeETHTest is Modifiers {
         public
         asGovernor
         registerValidator(bytes("publicKey"))
+        stakeETH(bytes("publicKey"), 1 ether)
+        verifyValidator(bytes("publicKey"), 0)
+        verifyDeposit(bytes("publicKey"), 0)
     {
-        // Todo: Implement the verifyValidator function before
+        deal(address(weth), address(strategy), 1 ether);
+        bytes32 depositDataRoot = getDepositDataRoots(bytes("publicKey"), 0);
+        vm.expectRevert("Deposit too small");
+        strategy.stakeEth(
+            ValidatorStakeData(bytes("publicKey"), bytes(""), depositDataRoot), uint64(0.5 ether / 1 gwei)
+        );
     }
 }

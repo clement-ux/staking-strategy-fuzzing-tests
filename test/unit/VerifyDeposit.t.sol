@@ -179,7 +179,7 @@ contract VerifyDepositTest is Modifiers {
         );
         vm.expectRevert("Slot not after deposit");
         strategy.verifyDeposit(
-            getDepositDataRoots(bytes("publicKey"), 0), uint64(block.number), type(uint64).max, 1, bytes("")
+            getDepositDataRoots(bytes("publicKey"), 0), uint64(block.number), uint64(block.number - 1), 0, bytes("")
         );
     }
 }
