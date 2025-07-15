@@ -10,6 +10,9 @@ import { CompoundingStakingSSVStrategy } from
     "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
 import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxies.sol";
 
+// ERC
+import { WETH } from "@solmate/tokens/WETH.sol";
+
 // Mocks
 import { MockERC20 } from "@solmate/test/utils/mocks/MockERC20.sol";
 import { MockSSVNetwork } from "test/mocks/MockSSVNetwork.sol";
@@ -78,7 +81,7 @@ abstract contract Setup is Base {
         vm.startPrank(deployer);
 
         // Deploy WETH
-        weth = new MockERC20("Wrapped Ether", "WETH", 18);
+        weth = new WETH();
         ssv = new MockERC20("SSV Network Token", "SSV", 18);
 
         // Deploy mocks
@@ -154,5 +157,7 @@ abstract contract Setup is Base {
         strategy.addSourceStrategy(address(mockConsolidationStrategy));
 
         vm.stopPrank();
+
+        vm.deal(address(weth), 1_000_000_000 ether);
     }
 }

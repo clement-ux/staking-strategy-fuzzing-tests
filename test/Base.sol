@@ -5,6 +5,7 @@ pragma solidity 0.8.29;
 import { Test } from "@forge-std/Test.sol";
 
 // ERC
+import { WETH } from "@solmate/tokens/WETH.sol";
 import { ERC20 } from "@solmate/tokens/ERC20.sol";
 
 // Origin Dollar
@@ -32,8 +33,8 @@ abstract contract Base is Test {
     /// --- CONTRACTS
     //////////////////////////////////////////////////////
     // ERC20 tokens
+    WETH public weth;
     ERC20 public ssv;
-    ERC20 public weth;
 
     // Origin Dollar contracts
     CompoundingStakingSSVStrategy public strategy;
