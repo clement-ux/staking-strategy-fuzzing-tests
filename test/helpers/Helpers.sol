@@ -6,6 +6,7 @@ import { Setup } from "test/Setup.sol";
 
 abstract contract Helpers is Setup {
     mapping(bytes32 => uint256) public depositDataRootCount;
+    uint256 public validatorCount;
 
     /// @notice Hash a validator public key using the Beacon Chain's format
     function hashPubKey(

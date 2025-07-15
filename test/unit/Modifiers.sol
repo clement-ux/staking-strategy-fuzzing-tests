@@ -38,6 +38,11 @@ abstract contract Modifiers is Helpers {
         _;
     }
 
+    modifier verifyValidator(bytes memory publicKey, uint64 validatorIndex) {
+        _verifyValidator(publicKey, validatorIndex);
+        _;
+    }
+
     //////////////////////////////////////////////////////
     /// --- INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////
@@ -52,5 +57,10 @@ abstract contract Modifiers is Helpers {
         strategy.stakeEth(
             ValidatorStakeData(publicKey, bytes(""), generateDepositDataRoots(publicKey)), (amount / 1 gwei).toUint64()
         );
+    }
+
+    function _verifyValidator(bytes memory publicKey, uint64 validatorIndex) internal {
+        strategy.verifyValidator(block.timestamp.toUint64(), validatorIndex, hashPubKey(publicKey), bytes(""));
+        validatorCount++;
     }
 }
