@@ -13,7 +13,6 @@ default:
 install:
 	foundryup
 	forge soldeer install
-	rm -f requirements.txt
 
 
 # Cleaning Targets
