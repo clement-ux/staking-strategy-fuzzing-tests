@@ -3,6 +3,8 @@ pragma solidity 0.8.29;
 
 import { LibBytes } from "@solady/utils/LibBytes.sol";
 
+import { RewardDistributor } from "./RewardDistributor.sol";
+
 contract BeaconChain {
     using LibBytes for bytes;
 
@@ -18,6 +20,8 @@ contract BeaconChain {
     // Address where slashing rewards are sent to (generated using pk = uint256(keccak256(abi.encodePacked("name")))).
     // Using a real address instead of zero, to track ETH flow in tests.
     address public constant SLASHING_REWARD_RECIPIENT = address(0x91a36674f318e82322241CB62f771c90e3B77acb);
+
+    RewardDistributor public immutable rewardDistributor = new RewardDistributor();
 
     ////////////////////////////////////////////////////
     /// --- STRUCTS & ENUM
@@ -56,6 +60,20 @@ contract BeaconChain {
     Validator[] public validators; // unordered list of validator
 
     ////////////////////////////////////////////////////
+    /// --- ERRORS & EVENTS
+    ////////////////////////////////////////////////////
+    // Deposit events
+    event BeaconChain___Deposit(bytes pubkey, uint256 amount);
+    event BeaconChain___DepositProcessed(bytes pubkey, uint256 amount);
+
+    // Validators events
+    event BeaconChain___ValidatorCreated(bytes pubkey);
+    event BeaconChain___ValidatorActivated(bytes pubkey);
+    event BeaconChain___ValidatorExited(bytes pubkey);
+    event BeaconChain___ValidatorWithdrawable(bytes pubkey);
+    event BeaconChain___ValidatorSlashed(bytes pubkey, uint256 amount);
+
+    ////////////////////////////////////////////////////
     /// --- DEPOSIT FUNCTIONS
     ////////////////////////////////////////////////////
     function deposit(
@@ -63,11 +81,12 @@ contract BeaconChain {
         bytes calldata, /*withdrawal_credentials*/
         bytes calldata, /*signature*/
         bytes32 /*deposit_data_root*/
-    ) external payable {
+    ) public payable {
         require(msg.value >= MIN_DEPOSIT, "Minimum deposit is 1 ETH");
         depositQueue.push(
             Queue({ amount: msg.value, pubkey: pubkey, timestamp: uint64(block.timestamp), owner: msg.sender })
         );
+        emit BeaconChain___Deposit(pubkey, msg.value);
     }
 
     /// @param index The index of the deposit to process, should be always 0 to process in FIFO order, but can be any index
@@ -100,6 +119,7 @@ contract BeaconChain {
                     status: ValidatorStatus.DEPOSITED
                 })
             );
+            emit BeaconChain___ValidatorCreated(pubkey);
 
             // Add to pendingQueue
             pendingQueue.push(
@@ -110,6 +130,9 @@ contract BeaconChain {
                     owner: pendingDeposit.owner
                 })
             );
+            emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount);
+
+            return;
         }
 
         // --- 2. Validator exists, handle based on its current status
@@ -125,14 +148,17 @@ contract BeaconChain {
                     break;
                 }
             }
+            emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount);
         }
         // --- 2.b. Validator exists and is ACTIVE or WITHDRAWABLE, increase stake
         else if (currentStatus == ValidatorStatus.ACTIVE || currentStatus == ValidatorStatus.WITHDRAWABLE) {
             validator.amount += pendingDeposit.amount;
+            emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount);
         }
         // --- 2.c. Exited validators cannot be reactivated, so deposits are postponed
         else if (currentStatus == ValidatorStatus.EXITED) {
             depositQueue.push(pendingDeposit);
+            emit BeaconChain___Deposit(pubkey, pendingDeposit.amount);
         }
     }
 
@@ -180,6 +206,20 @@ contract BeaconChain {
                 status: ValidatorStatus.ACTIVE
             })
         );
+
+        emit BeaconChain___ValidatorActivated(pubkey);
+    }
+
+    function simulateRewards(uint16 index, uint256 amount) public {
+        require(index < validators.length, "Invalid validator index");
+        Validator storage validator = validators[index];
+        require(validator.status == ValidatorStatus.ACTIVE, "Validator must be ACTIVE to receive rewards");
+
+        // Increase the validator's amount by the reward
+        validator.amount += amount;
+
+        // Distribute rewards using RewardDistributor
+        rewardDistributor.distributeRewards(address(this), amount);
     }
 
     ////////////////////////////////////////////////////
@@ -306,6 +346,7 @@ contract BeaconChain {
     /// --- HELPER FUNCTIONS
     ////////////////////////////////////////////////////
     function _removeFromList(Queue[] storage list, uint256 index) internal {
+        if (list.length == 0) return;
         require(index < list.length, "Invalid index");
         for (uint256 i = index; i < list.length - 1; i++) {
             list[i] = list[i + 1];
@@ -323,7 +364,7 @@ contract BeaconChain {
         return validators[index];
     }
 
-    function getActiveValidators() external view returns (Validator[] memory) {
+    function getValidators() external view returns (Validator[] memory) {
         return validators;
     }
 
