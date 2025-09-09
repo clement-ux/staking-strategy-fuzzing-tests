@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { LibBytes } from "@solady/utils/LibBytes.sol";
+
 contract BeaconChain {
+    using LibBytes for bytes;
+
     ////////////////////////////////////////////////////
     /// --- CONSTRANTS & IMMUTABLES
     ////////////////////////////////////////////////////
+    uint256 public constant NOT_FOUND = type(uint256).max;
     uint256 public constant MIN_DEPOSIT = 1 ether;
     uint256 public constant MIN_EXIT_AMOUNT = 16 ether;
     uint256 public constant ACTIVATION_AMOUNT = 32 ether;
@@ -66,9 +71,7 @@ contract BeaconChain {
     Deposit[] public depositQueue;
     Pending[] public pendingQueue;
     Withdraw[] public withdrawQueue;
-    Validator[] public validatorList; // unordered list of active validators
-
-    mapping(bytes pubkey => Validator) public validators;
+    Validator[] public validators; // unordered list of validator
 
     ////////////////////////////////////////////////////
     /// --- DEPOSIT FUNCTIONS
@@ -88,7 +91,7 @@ contract BeaconChain {
     /// @param index The index of the deposit to process, should be always 0 to process in FIFO order, but can be any index
     /// to allow flexibility
     function processDeposit(
-        uint16 index
+        uint256 index
     ) public {
         // Ensure the index is within bounds
         require(index < depositQueue.length, "Invalid deposit index");
@@ -103,16 +106,21 @@ contract BeaconChain {
         depositQueue.pop(); // Remove the last element (now a duplicate)
 
         bytes memory pubkey = pendingDeposit.pubkey;
-        ValidatorStatus currentStatus = validators[pubkey].status;
 
-        // --- 1. Validator doesn't exist, create it
-        if (currentStatus == ValidatorStatus.UNKNOWN) {
-            validators[pubkey] = Validator({
-                pubkey: pendingDeposit.pubkey,
-                amount: 0,
-                owner: pendingDeposit.owner,
-                status: ValidatorStatus.DEPOSITED
-            });
+        // Get the validator index corresponding to the pubkey, if it exists
+        // It is same to reuse `index` variable as not used anymore
+        index = getValidatorIndex(pubkey);
+
+        // --- 1. Validator doesn't exist for this pubkey, create it
+        if (index == NOT_FOUND) {
+            validators.push(
+                Validator({
+                    pubkey: pendingDeposit.pubkey,
+                    amount: 0,
+                    owner: pendingDeposit.owner,
+                    status: ValidatorStatus.DEPOSITED
+                })
+            );
 
             // Add to pendingQueue
             pendingQueue.push(
@@ -124,8 +132,13 @@ contract BeaconChain {
                 })
             );
         }
-        // --- 2. Validator is in DEPOSITED state, increase pending validator amount
-        else if (currentStatus == ValidatorStatus.DEPOSITED) {
+
+        // --- 2. Validator exists, handle based on its current status
+        Validator storage validator = validators[index];
+        ValidatorStatus currentStatus = validator.status;
+
+        // --- 2.a. Validator is in DEPOSITED state, increase pending validator amount
+        if (currentStatus == ValidatorStatus.DEPOSITED) {
             // Find the pending validator and increase its amount
             for (uint256 i = 0; i < pendingQueue.length; i++) {
                 if (keccak256(pendingQueue[i].pubkey) == keccak256(pubkey)) {
@@ -134,11 +147,11 @@ contract BeaconChain {
                 }
             }
         }
-        // --- 3. Validator exists and is ACTIVE or WITHDRAWABLE, increase stake
+        // --- 2.b. Validator exists and is ACTIVE or WITHDRAWABLE, increase stake
         else if (currentStatus == ValidatorStatus.ACTIVE || currentStatus == ValidatorStatus.WITHDRAWABLE) {
-            validators[pubkey].amount += pendingDeposit.amount;
+            validator.amount += pendingDeposit.amount;
         }
-        // --- 4. Exited validators cannot be reactivated, so deposits are postponed
+        // --- 2.c. Exited validators cannot be reactivated, so deposits are postponed
         else if (currentStatus == ValidatorStatus.EXITED) {
             depositQueue.push(pendingDeposit);
         }
@@ -147,7 +160,7 @@ contract BeaconChain {
     /// @param index The index of the pending validator to activate, should be always 0 to process in FIFO order, but can be
     /// any index to allow flexibility
     function activateValidator(
-        uint16 index
+        uint256 index
     ) public {
         require(index < pendingQueue.length, "Invalid pending validator index");
 
@@ -161,8 +174,11 @@ contract BeaconChain {
             pendingQueue[i] = pendingQueue[i + 1];
         }
 
+        // Get the validator index corresponding to the pubkey, it must exist
+        Validator storage validator = validators[getValidatorIndex(pubkey)];
+
         // If the pending validator has less than 32 ETH, update the last element and return
-        if (validators[pubkey].amount + pendingValidator.amount < ACTIVATION_AMOUNT) {
+        if (validator.amount + pendingValidator.amount < ACTIVATION_AMOUNT) {
             pendingQueue[pendingQueue.length - 1] = pendingValidator;
             return;
         } else {
@@ -170,17 +186,17 @@ contract BeaconChain {
         }
 
         // Ensure the validator is in DEPOSITED state
-        require(validators[pubkey].status == ValidatorStatus.DEPOSITED, "Validator must be in DEPOSITED state");
+        require(validator.status == ValidatorStatus.DEPOSITED, "Validator must be in DEPOSITED state");
 
         // Update the validator's status and amount
-        validators[pubkey].status = ValidatorStatus.ACTIVE;
-        validators[pubkey].amount += pendingValidator.amount;
+        validator.status = ValidatorStatus.ACTIVE;
+        validator.amount += pendingValidator.amount;
 
-        // Add to validatorList
-        validatorList.push(
+        // Add to validators
+        validators.push(
             Validator({
                 pubkey: pendingValidator.pubkey,
-                amount: validators[pubkey].amount,
+                amount: validator.amount,
                 owner: pendingValidator.owner,
                 status: ValidatorStatus.ACTIVE
             })
@@ -191,16 +207,16 @@ contract BeaconChain {
     /// --- WITHDRAW FUNCTIONS
     ////////////////////////////////////////////////////
 
-    function withdraw(bytes calldata validatorPubKey, uint256 amount) external {
-        Validator memory validator = validators[validatorPubKey];
+    function withdraw(bytes calldata pubkey, uint256 amount) external {
+        Validator memory validator = validators[getValidatorIndex(pubkey)];
         require(validator.owner == msg.sender, "Only owner can request withdrawal");
         require(validator.amount >= amount, "Insufficient validator balance");
 
-        withdrawQueue.push(Withdraw({ pubkey: validatorPubKey, amount: amount, timestamp: uint64(block.timestamp) }));
+        withdrawQueue.push(Withdraw({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp) }));
     }
 
     function processWithdraw(
-        uint16 index
+        uint256 index
     ) public {
         require(index < withdrawQueue.length, "Invalid withdrawal index");
 
@@ -214,7 +230,9 @@ contract BeaconChain {
         withdrawQueue.pop(); // Remove the last element (now a duplicate)
 
         bytes memory pubkey = pendingWithdrawal.pubkey;
-        Validator storage validator = validators[pubkey];
+
+        // Get the validator index corresponding to the pubkey, it must exist
+        Validator storage validator = validators[getValidatorIndex(pubkey)];
 
         // Ensure the validator has enough balance and deduct the amount
         require(validator.amount >= pendingWithdrawal.amount, "Insufficient validator balance");
@@ -232,7 +250,7 @@ contract BeaconChain {
     }
 
     function processExit(
-        uint16 index
+        uint256 index
     ) public {
         require(index < exitQueue.length, "Invalid exit index");
 
@@ -246,7 +264,9 @@ contract BeaconChain {
         exitQueue.pop(); // Remove the last element (now a duplicate)
 
         bytes memory pubkey = exitingValidator.pubkey;
-        Validator storage validator = validators[pubkey];
+
+        //  Get the validator index corresponding to the pubkey, it must exist
+        Validator storage validator = validators[getValidatorIndex(pubkey)];
 
         // Ensure the validator is in EXITED state
         require(validator.status == ValidatorStatus.EXITED, "Validator must be in EXITED state");
@@ -258,8 +278,8 @@ contract BeaconChain {
     /// @notice Get through all active validators and process:
     /// - removed all amount above 2048 ETH, assuming only 0x02 validators
     function processSweep() public {
-        for (uint256 i = 0; i < validatorList.length; i++) {
-            Validator storage validator = validatorList[i];
+        for (uint256 i = 0; i < validators.length; i++) {
+            Validator storage validator = validators[i];
             ValidatorStatus status = validator.status;
             if (status == ValidatorStatus.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
             if (status == ValidatorStatus.DEPOSITED) continue;
@@ -288,8 +308,8 @@ contract BeaconChain {
     }
 
     function slash(uint16 index, uint256 amount) public {
-        require(index < validatorList.length, "Invalid validator index");
-        Validator storage validator = validatorList[index];
+        require(index < validators.length, "Invalid validator index");
+        Validator storage validator = validators[index];
         require(validator.amount >= amount, "Insufficient validator balance to slash");
         require(validator.status == ValidatorStatus.ACTIVE, "Validator must be ACTIVE to be slashed");
 
@@ -311,13 +331,14 @@ contract BeaconChain {
     /// --- VIEW FUNCTIONS
     ////////////////////////////////////////////////////
     function getValidator(
-        bytes calldata pubkey
+        uint256 index
     ) external view returns (Validator memory) {
-        return validators[pubkey];
+        require(index < validators.length, "Invalid validator index");
+        return validators[index];
     }
 
     function getActiveValidators() external view returns (Validator[] memory) {
-        return validatorList;
+        return validators;
     }
 
     function getDepositQueue() external view returns (Deposit[] memory) {
@@ -334,5 +355,14 @@ contract BeaconChain {
 
     function getExitQueue() external view returns (Exiting[] memory) {
         return exitQueue;
+    }
+
+    function getValidatorIndex(
+        bytes memory pubkey
+    ) public view returns (uint256) {
+        for (uint256 i = 0; i < validators.length; i++) {
+            if (validators[i].pubkey.eq(pubkey)) return i;
+        }
+        return type(uint256).max; // Not found
     }
 }
