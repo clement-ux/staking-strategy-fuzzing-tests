@@ -21,7 +21,8 @@ contract BeaconChain {
         UNKNOWN, // default value
         DEPOSITED, // ensure 1 eth has been deposited, at this stage validator is not yet active
         ACTIVE, // validator is active and participating in consensus
-        EXITED // validator has exited and is no longer participating
+        EXITED, // validator has exited and is no longer participating
+        WITHDRAWABLE // validator has exited and can withdraw funds (not implemented)
 
     }
 
@@ -65,12 +66,12 @@ contract BeaconChain {
     Deposit[] public depositQueue;
     Pending[] public pendingQueue;
     Withdraw[] public withdrawQueue;
-    Validator[] public activeValidators; // unordered list of active validators
+    Validator[] public validatorList; // unordered list of active validators
 
     mapping(bytes pubkey => Validator) public validators;
 
     ////////////////////////////////////////////////////
-    /// --- MUTATIVE FUNCTIONS
+    /// --- DEPOSIT FUNCTIONS
     ////////////////////////////////////////////////////
     function deposit(
         bytes calldata pubkey,
@@ -82,14 +83,6 @@ contract BeaconChain {
         depositQueue.push(
             Deposit({ amount: msg.value, pubkey: pubkey, timestamp: uint64(block.timestamp), owner: msg.sender })
         );
-    }
-
-    function withdraw(bytes calldata validatorPubKey, uint256 amount) external {
-        Validator memory validator = validators[validatorPubKey];
-        require(validator.owner == msg.sender, "Only owner can request withdrawal");
-        require(validator.amount >= amount, "Insufficient validator balance");
-
-        withdrawQueue.push(Withdraw({ pubkey: validatorPubKey, amount: amount, timestamp: uint64(block.timestamp) }));
     }
 
     /// @param index The index of the deposit to process, should be always 0 to process in FIFO order, but can be any index
@@ -141,13 +134,13 @@ contract BeaconChain {
                 }
             }
         }
-        // --- 3. Validator exists and is ACTIVE, increase stake
-        else if (currentStatus == ValidatorStatus.ACTIVE) {
+        // --- 3. Validator exists and is ACTIVE or WITHDRAWABLE, increase stake
+        else if (currentStatus == ValidatorStatus.ACTIVE || currentStatus == ValidatorStatus.WITHDRAWABLE) {
             validators[pubkey].amount += pendingDeposit.amount;
         }
-        // --- 4. Exited validators cannot be reactivated
+        // --- 4. Exited validators cannot be reactivated, so deposits are postponed
         else if (currentStatus == ValidatorStatus.EXITED) {
-            depositQueue.push(pendingDeposit); // Refund the deposit by re-adding it to pending deposits
+            depositQueue.push(pendingDeposit);
         }
     }
 
@@ -183,8 +176,8 @@ contract BeaconChain {
         validators[pubkey].status = ValidatorStatus.ACTIVE;
         validators[pubkey].amount += pendingValidator.amount;
 
-        // Add to activeValidators
-        activeValidators.push(
+        // Add to validatorList
+        validatorList.push(
             Validator({
                 pubkey: pendingValidator.pubkey,
                 amount: validators[pubkey].amount,
@@ -192,6 +185,18 @@ contract BeaconChain {
                 status: ValidatorStatus.ACTIVE
             })
         );
+    }
+
+    ////////////////////////////////////////////////////
+    /// --- WITHDRAW FUNCTIONS
+    ////////////////////////////////////////////////////
+
+    function withdraw(bytes calldata validatorPubKey, uint256 amount) external {
+        Validator memory validator = validators[validatorPubKey];
+        require(validator.owner == msg.sender, "Only owner can request withdrawal");
+        require(validator.amount >= amount, "Insufficient validator balance");
+
+        withdrawQueue.push(Withdraw({ pubkey: validatorPubKey, amount: amount, timestamp: uint64(block.timestamp) }));
     }
 
     function processWithdraw(
@@ -246,39 +251,45 @@ contract BeaconChain {
         // Ensure the validator is in EXITED state
         require(validator.status == ValidatorStatus.EXITED, "Validator must be in EXITED state");
 
-        // Remove from activeValidators, not conserving order
-        for (uint256 i = 0; i < activeValidators.length; i++) {
-            if (keccak256(activeValidators[i].pubkey) == keccak256(pubkey)) {
-                // Move the last element to the current index and pop the last element
-                activeValidators[i] = activeValidators[activeValidators.length - 1];
-                activeValidators.pop();
-                break;
-            }
-        }
-
-        // Finally, remove the validator from the mapping
-        delete validators[pubkey];
+        // Validator can now be marked as WITHDRAWABLE
+        validator.status = ValidatorStatus.WITHDRAWABLE;
     }
 
     /// @notice Get through all active validators and process:
     /// - removed all amount above 2048 ETH, assuming only 0x02 validators
     function processSweep() public {
-        for (uint256 i = 0; i < activeValidators.length; i++) {
-            Validator storage validator = validators[activeValidators[i].pubkey];
-            if (validator.amount > MAX_EFFECTIVE_BALANCE) {
-                uint256 excess = validator.amount - MAX_EFFECTIVE_BALANCE;
-                validator.amount = MAX_EFFECTIVE_BALANCE;
+        for (uint256 i = 0; i < validatorList.length; i++) {
+            Validator storage validator = validatorList[i];
+            ValidatorStatus status = validator.status;
+            if (status == ValidatorStatus.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
+            if (status == ValidatorStatus.DEPOSITED) continue;
+            if (status == ValidatorStatus.ACTIVE) {
+                if (validator.amount > MAX_EFFECTIVE_BALANCE) {
+                    uint256 excess = validator.amount - MAX_EFFECTIVE_BALANCE;
+                    validator.amount = MAX_EFFECTIVE_BALANCE;
 
-                // Transfer excess ETH to the validator owner
-                (bool success,) = validator.owner.call{ value: excess }("");
-                require(success, "Excess transfer failed");
+                    // Transfer excess ETH to the validator owner
+                    (bool success,) = validator.owner.call{ value: excess }("");
+                    require(success, "Excess transfer failed");
+                }
+            }
+            if (status == ValidatorStatus.EXITED) continue;
+            if (status == ValidatorStatus.WITHDRAWABLE) {
+                if (validator.amount > 0) {
+                    uint256 excess = validator.amount;
+                    validator.amount = 0;
+
+                    // Transfer all ETH to the validator owner
+                    (bool success,) = validator.owner.call{ value: excess }("");
+                    require(success, "Withdrawable transfer failed");
+                }
             }
         }
     }
 
     function slash(uint16 index, uint256 amount) public {
-        require(index < activeValidators.length, "Invalid validator index");
-        Validator storage validator = activeValidators[index];
+        require(index < validatorList.length, "Invalid validator index");
+        Validator storage validator = validatorList[index];
         require(validator.amount >= amount, "Insufficient validator balance to slash");
         require(validator.status == ValidatorStatus.ACTIVE, "Validator must be ACTIVE to be slashed");
 
@@ -306,7 +317,7 @@ contract BeaconChain {
     }
 
     function getActiveValidators() external view returns (Validator[] memory) {
-        return activeValidators;
+        return validatorList;
     }
 
     function getDepositQueue() external view returns (Deposit[] memory) {
