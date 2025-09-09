@@ -31,30 +31,12 @@ contract BeaconChain {
 
     }
 
-    struct Deposit {
+    /// @notice Struct used to represent: Deposit, Pending, Exiting and Withdraw
+    struct Queue {
         bytes pubkey;
         uint64 timestamp;
         uint256 amount; // in wei
         address owner;
-    }
-
-    struct Pending {
-        bytes pubkey;
-        uint64 timestamp;
-        uint256 amount; // in wei
-        address owner;
-    }
-
-    struct Exiting {
-        bytes pubkey;
-        uint64 timestamp;
-        address owner;
-    }
-
-    struct Withdraw {
-        bytes pubkey;
-        uint64 timestamp;
-        uint256 amount; // in wei
     }
 
     struct Validator {
@@ -67,10 +49,10 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     /// --- STORAGE
     ////////////////////////////////////////////////////
-    Exiting[] public exitQueue;
-    Deposit[] public depositQueue;
-    Pending[] public pendingQueue;
-    Withdraw[] public withdrawQueue;
+    Queue[] public exitQueue;
+    Queue[] public depositQueue;
+    Queue[] public pendingQueue;
+    Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
 
     ////////////////////////////////////////////////////
@@ -84,7 +66,7 @@ contract BeaconChain {
     ) external payable {
         require(msg.value >= MIN_DEPOSIT, "Minimum deposit is 1 ETH");
         depositQueue.push(
-            Deposit({ amount: msg.value, pubkey: pubkey, timestamp: uint64(block.timestamp), owner: msg.sender })
+            Queue({ amount: msg.value, pubkey: pubkey, timestamp: uint64(block.timestamp), owner: msg.sender })
         );
     }
 
@@ -97,13 +79,10 @@ contract BeaconChain {
         require(index < depositQueue.length, "Invalid deposit index");
 
         // Store deposit in memory to avoid multiple SLOADs
-        Deposit memory pendingDeposit = depositQueue[index];
+        Queue memory pendingDeposit = depositQueue[index];
 
         // Remove deposit from depositQueue and conserve order, by shifting elements from right to left
-        for (uint256 i = index; i < depositQueue.length - 1; i++) {
-            depositQueue[i] = depositQueue[i + 1];
-        }
-        depositQueue.pop(); // Remove the last element (now a duplicate)
+        _removeFromList(depositQueue, index);
 
         bytes memory pubkey = pendingDeposit.pubkey;
 
@@ -124,7 +103,7 @@ contract BeaconChain {
 
             // Add to pendingQueue
             pendingQueue.push(
-                Pending({
+                Queue({
                     amount: pendingDeposit.amount,
                     pubkey: pendingDeposit.pubkey,
                     timestamp: pendingDeposit.timestamp,
@@ -165,7 +144,7 @@ contract BeaconChain {
         require(index < pendingQueue.length, "Invalid pending validator index");
 
         // Store pending validator in memory to avoid multiple SLOADs
-        Pending memory pendingValidator = pendingQueue[index];
+        Queue memory pendingValidator = pendingQueue[index];
         bytes memory pubkey = pendingValidator.pubkey;
 
         // Move the pending validator to the end of the array, conserving order
@@ -212,7 +191,7 @@ contract BeaconChain {
         require(validator.owner == msg.sender, "Only owner can request withdrawal");
         require(validator.amount >= amount, "Insufficient validator balance");
 
-        withdrawQueue.push(Withdraw({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp) }));
+        withdrawQueue.push(Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0) }));
     }
 
     function processWithdraw(
@@ -221,13 +200,10 @@ contract BeaconChain {
         require(index < withdrawQueue.length, "Invalid withdrawal index");
 
         // Store withdrawal in memory to avoid multiple SLOADs
-        Withdraw memory pendingWithdrawal = withdrawQueue[index];
+        Queue memory pendingWithdrawal = withdrawQueue[index];
 
         // Remove withdrawal from withdrawQueue and conserve order, by shifting elements from right to left
-        for (uint256 i = index; i < withdrawQueue.length - 1; i++) {
-            withdrawQueue[i] = withdrawQueue[i + 1];
-        }
-        withdrawQueue.pop(); // Remove the last element (now a duplicate)
+        _removeFromList(withdrawQueue, index);
 
         bytes memory pubkey = pendingWithdrawal.pubkey;
 
@@ -245,7 +221,7 @@ contract BeaconChain {
         // If validator amount is less than 16 ETH, move validator to exit queue
         if (validator.amount < ACTIVATION_AMOUNT / 2) {
             validator.status = ValidatorStatus.EXITED;
-            exitQueue.push(Exiting({ pubkey: pubkey, timestamp: uint64(block.timestamp), owner: validator.owner }));
+            exitQueue.push(Queue({ pubkey: pubkey, timestamp: uint64(block.timestamp), amount: 0, owner: validator.owner }));
         }
     }
 
@@ -255,13 +231,10 @@ contract BeaconChain {
         require(index < exitQueue.length, "Invalid exit index");
 
         // Store exiting validator in memory to avoid multiple SLOADs
-        Exiting memory exitingValidator = exitQueue[index];
+        Queue memory exitingValidator = exitQueue[index];
 
         // Remove exiting validator from exitQueue and conserve order, by shifting elements from right to left
-        for (uint256 i = index; i < exitQueue.length - 1; i++) {
-            exitQueue[i] = exitQueue[i + 1];
-        }
-        exitQueue.pop(); // Remove the last element (now a duplicate)
+        _removeFromList(exitQueue, index);
 
         bytes memory pubkey = exitingValidator.pubkey;
 
@@ -321,10 +294,23 @@ contract BeaconChain {
         require(success, "Slashing transfer failed");
 
         // If validator amount is less than 16 ETH, move validator to exit queue
-        if (validator.amount < ACTIVATION_AMOUNT / 2) {
+        if (validator.amount < MIN_EXIT_AMOUNT) {
             validator.status = ValidatorStatus.EXITED;
-            exitQueue.push(Exiting({ pubkey: validator.pubkey, timestamp: uint64(block.timestamp), owner: validator.owner }));
+            exitQueue.push(
+                Queue({ pubkey: validator.pubkey, timestamp: uint64(block.timestamp), amount: 0, owner: validator.owner })
+            );
         }
+    }
+
+    ////////////////////////////////////////////////////
+    /// --- HELPER FUNCTIONS
+    ////////////////////////////////////////////////////
+    function _removeFromList(Queue[] storage list, uint256 index) internal {
+        require(index < list.length, "Invalid index");
+        for (uint256 i = index; i < list.length - 1; i++) {
+            list[i] = list[i + 1];
+        }
+        list.pop();
     }
 
     ////////////////////////////////////////////////////
@@ -341,19 +327,19 @@ contract BeaconChain {
         return validators;
     }
 
-    function getDepositQueue() external view returns (Deposit[] memory) {
+    function getDepositQueue() external view returns (Queue[] memory) {
         return depositQueue;
     }
 
-    function getPendingQueue() external view returns (Pending[] memory) {
+    function getPendingQueue() external view returns (Queue[] memory) {
         return pendingQueue;
     }
 
-    function getWithdrawQueue() external view returns (Withdraw[] memory) {
+    function getWithdrawQueue() external view returns (Queue[] memory) {
         return withdrawQueue;
     }
 
-    function getExitQueue() external view returns (Exiting[] memory) {
+    function getExitQueue() external view returns (Queue[] memory) {
         return exitQueue;
     }
 
@@ -363,6 +349,6 @@ contract BeaconChain {
         for (uint256 i = 0; i < validators.length; i++) {
             if (validators[i].pubkey.eq(pubkey)) return i;
         }
-        return type(uint256).max; // Not found
+        return NOT_FOUND; // Not found
     }
 }
