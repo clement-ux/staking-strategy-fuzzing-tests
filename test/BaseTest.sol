@@ -23,5 +23,10 @@ contract BaseTest is Test {
 
         deal(address(alice), 1_000_000 ether);
         deal(address(beaconChain.REWARD_DISTRIBUTOR()), 1_000_000 ether);
+        beaconChain.registerSsvValidator(validator1);
+        beaconChain.registerSsvValidator(validator2);
+        beaconChain.registerSsvValidator(validator3);
+        beaconChain.registerSsvValidator(validator4);
+        beaconChain.registerSsvValidator(validator5);
     }
 }

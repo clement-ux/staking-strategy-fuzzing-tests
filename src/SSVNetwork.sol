@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { BeaconChain } from "./BeaconChain.sol";
+
 contract SSVNetwork {
     ////////////////////////////////////////////////////
     /// --- STRUCTS & ENUM
@@ -21,8 +23,7 @@ contract SSVNetwork {
     ////////////////////////////////////////////////////
     /// --- STORAGE
     ////////////////////////////////////////////////////
-    mapping(bytes publicKey => Validator) public validators;
-    Validator[] public allValidators;
+    BeaconChain public beaconChain;
 
     ////////////////////////////////////////////////////
     /// --- MUTATIVE FUNCTIONS
@@ -34,21 +35,6 @@ contract SSVNetwork {
         uint256, /*c*/
         Cluster memory /*d*/
     ) external {
-        require(validators[publicKey].owner == address(0), "Validator already registered");
-        validators[publicKey] = Validator({ publicKey: publicKey, owner: msg.sender });
-        allValidators.push(validators[publicKey]);
-    }
-
-    ////////////////////////////////////////////////////
-    /// --- VIEW FUNCTIONS
-    ////////////////////////////////////////////////////
-    function getValidator(
-        bytes memory publicKey
-    ) external view returns (Validator memory) {
-        return validators[publicKey];
-    }
-
-    function getAllValidators() external view returns (Validator[] memory) {
-        return allValidators;
+        beaconChain.registerSsvValidator(publicKey);
     }
 }

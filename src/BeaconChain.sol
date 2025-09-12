@@ -58,6 +58,7 @@ contract BeaconChain {
     Queue[] public pendingQueue;
     Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
+    mapping(bytes pubkey => bool registered) public ssvRegistreredValidators; // mapping of SSV registered validators
 
     ////////////////////////////////////////////////////
     /// --- ERRORS & EVENTS
@@ -92,6 +93,7 @@ contract BeaconChain {
         bytes32 /*deposit_data_root*/
     ) public payable {
         require(msg.value >= MIN_DEPOSIT, "Minimum deposit is 1 ETH");
+        require(ssvRegistreredValidators[pubkey], "Validator not registered in SSVNetwork");
         depositQueue.push(
             Queue({ amount: msg.value, pubkey: pubkey, timestamp: uint64(block.timestamp), owner: msg.sender })
         );
@@ -209,21 +211,6 @@ contract BeaconChain {
         emit BeaconChain___ValidatorActivated(pubkey);
     }
 
-    function simulateRewards(bytes memory pubkey, uint256 amount) public {
-        uint256 index = getValidatorIndex(pubkey);
-        require(index < validators.length, "Invalid validator index");
-        Validator storage validator = validators[index];
-        require(validator.status == ValidatorStatus.ACTIVE, "Validator must be ACTIVE to receive rewards");
-
-        // Increase the validator's amount by the reward
-        validator.amount += amount;
-
-        // Distribute rewards using RewardDistributor
-        REWARD_DISTRIBUTOR.distributeRewards(address(this), amount);
-
-        emit BeaconChain___RewardsDistributed(pubkey, amount);
-    }
-
     ////////////////////////////////////////////////////
     /// --- WITHDRAW FUNCTIONS
     ////////////////////////////////////////////////////
@@ -329,6 +316,31 @@ contract BeaconChain {
                 }
             }
         }
+    }
+
+    ////////////////////////////////////////////////////
+    /// --- VALIDATORS MANAGEMENT FUNCTIONS
+    ////////////////////////////////////////////////////
+    function registerSsvValidator(
+        bytes memory pubkey
+    ) public {
+        require(!ssvRegistreredValidators[pubkey], "Validator already registered");
+        ssvRegistreredValidators[pubkey] = true;
+    }
+
+    function simulateRewards(bytes memory pubkey, uint256 amount) public {
+        uint256 index = getValidatorIndex(pubkey);
+        require(index < validators.length, "Invalid validator index");
+        Validator storage validator = validators[index];
+        require(validator.status == ValidatorStatus.ACTIVE, "Validator must be ACTIVE to receive rewards");
+
+        // Increase the validator's amount by the reward
+        validator.amount += amount;
+
+        // Distribute rewards using RewardDistributor
+        REWARD_DISTRIBUTOR.distributeRewards(address(this), amount);
+
+        emit BeaconChain___RewardsDistributed(pubkey, amount);
     }
 
     function slash(bytes memory pubkey, uint256 amount) public {
