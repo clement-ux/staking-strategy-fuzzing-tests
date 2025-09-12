@@ -26,6 +26,15 @@ contract SSVNetwork {
     BeaconChain public beaconChain;
 
     ////////////////////////////////////////////////////
+    /// --- CONSTRUCTOR
+    ////////////////////////////////////////////////////
+    constructor(
+        address _beaconChain
+    ) {
+        beaconChain = BeaconChain(payable(_beaconChain));
+    }
+
+    ////////////////////////////////////////////////////
     /// --- MUTATIVE FUNCTIONS
     ////////////////////////////////////////////////////
     function registerValidator(
@@ -36,5 +45,9 @@ contract SSVNetwork {
         Cluster memory /*d*/
     ) external {
         beaconChain.registerSsvValidator(publicKey);
+    }
+
+    function removeSsvValidator(bytes memory publicKey, uint64[] memory, /*a*/ Cluster memory /*b*/ ) external {
+        beaconChain.removeSsvValidator(publicKey);
     }
 }

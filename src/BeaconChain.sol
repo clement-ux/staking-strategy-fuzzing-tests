@@ -78,6 +78,8 @@ contract BeaconChain {
     event BeaconChain___ValidatorSlashed(bytes pubkey, uint256 amount);
 
     // General
+    event SSVNetwork___ValidatorRegistered(bytes pubkey);
+    event SSVNetwork___ValidatorRemoved(bytes pubkey);
     event BeaconChain___Sweep(bytes pubkey, uint256 amount);
     event BeaconChain___RewardsDistributed(bytes to, uint256 amount);
 
@@ -326,6 +328,20 @@ contract BeaconChain {
     ) public {
         require(!ssvRegistreredValidators[pubkey], "Validator already registered");
         ssvRegistreredValidators[pubkey] = true;
+
+        emit SSVNetwork___ValidatorRegistered(pubkey);
+    }
+
+    function removeSsvValidator(
+        bytes memory pubkey
+    ) public {
+        Validator memory validator = validators[getValidatorIndex(pubkey)];
+        require(ssvRegistreredValidators[pubkey], "Validator not registered");
+        require(validator.status != ValidatorStatus.WITHDRAWABLE, "Cannot remove WITHDRAWABLE validator");
+        require(validator.amount == 0, "Cannot remove validator with balance");
+        ssvRegistreredValidators[pubkey] = false;
+
+        emit SSVNetwork___ValidatorRemoved(pubkey);
     }
 
     function simulateRewards(bytes memory pubkey, uint256 amount) public {
