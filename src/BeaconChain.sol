@@ -385,6 +385,8 @@ contract BeaconChain {
         }
     }
 
+    function fee() external pure returns (uint256) { }
+
     ////////////////////////////////////////////////////
     /// --- HELPER FUNCTIONS
     ////////////////////////////////////////////////////
