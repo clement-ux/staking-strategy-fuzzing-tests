@@ -21,6 +21,7 @@ contract BaseTest is Test {
     function setUp() public virtual {
         beaconChain = new BeaconChain();
 
-        deal(address(alice), 1000 ether);
+        deal(address(alice), 1_000_000 ether);
+        deal(address(beaconChain.REWARD_DISTRIBUTOR()), 1_000_000 ether);
     }
 }
