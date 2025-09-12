@@ -25,10 +25,10 @@ contract DepositContract {
 
     function deposit(
         bytes memory pubkey,
-        bytes memory withdrawal_credentials,
+        bytes memory withdrawalCredentials,
         bytes memory signature,
-        bytes32 deposit_data_root
+        bytes32 depositDataRoot
     ) external payable {
-        beaconChain.deposit{ value: msg.value }(pubkey, withdrawal_credentials, signature, deposit_data_root);
+        beaconChain.deposit{ value: msg.value }(pubkey, withdrawalCredentials, signature, depositDataRoot);
     }
 }
