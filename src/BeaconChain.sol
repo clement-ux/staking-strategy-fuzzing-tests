@@ -21,7 +21,7 @@ contract BeaconChain {
     // Using a real address instead of zero, to track ETH flow in tests.
     address public constant SLASHING_REWARD_RECIPIENT = address(0x91a36674f318e82322241CB62f771c90e3B77acb);
 
-    RewardDistributor public immutable rewardDistributor = new RewardDistributor();
+    RewardDistributor public immutable REWARD_DISTRIBUTOR = new RewardDistributor();
 
     ////////////////////////////////////////////////////
     /// --- STRUCTS & ENUM
@@ -30,8 +30,8 @@ contract BeaconChain {
         UNKNOWN, // default value
         DEPOSITED, // ensure 1 eth has been deposited, at this stage validator is not yet active
         ACTIVE, // validator is active and participating in consensus
-        EXITED, // validator has exited and is no longer participating
-        WITHDRAWABLE // validator has exited and can withdraw funds (not implemented)
+        EXITED, // validator is no longer participating, but still has funds in the system
+        WITHDRAWABLE // validator has exited and can withdraw funds
 
     }
 
@@ -65,6 +65,9 @@ contract BeaconChain {
     // Deposit events
     event BeaconChain___Deposit(bytes pubkey, uint256 amount);
     event BeaconChain___DepositProcessed(bytes pubkey, uint256 amount);
+    event BeaconChain___Withdraw(bytes pubkey, uint256 amount);
+    event BeaconChain___WithdrawProcessed(bytes pubkey, uint256 amount);
+    event BeaconChain___Exit(bytes pubkey, uint256 remainingAmount);
 
     // Validators events
     event BeaconChain___ValidatorCreated(bytes pubkey);
@@ -73,9 +76,15 @@ contract BeaconChain {
     event BeaconChain___ValidatorWithdrawable(bytes pubkey);
     event BeaconChain___ValidatorSlashed(bytes pubkey, uint256 amount);
 
+    // General
+    event BeaconChain___Sweep(bytes pubkey, uint256 amount);
+    event BeaconChain___RewardsDistributed(bytes to, uint256 amount);
+
     ////////////////////////////////////////////////////
     /// --- DEPOSIT FUNCTIONS
     ////////////////////////////////////////////////////
+    receive() external payable { }
+
     function deposit(
         bytes calldata pubkey,
         bytes calldata, /*withdrawal_credentials*/
@@ -197,20 +206,11 @@ contract BeaconChain {
         validator.status = ValidatorStatus.ACTIVE;
         validator.amount += pendingValidator.amount;
 
-        // Add to validators
-        validators.push(
-            Validator({
-                pubkey: pendingValidator.pubkey,
-                amount: validator.amount,
-                owner: pendingValidator.owner,
-                status: ValidatorStatus.ACTIVE
-            })
-        );
-
         emit BeaconChain___ValidatorActivated(pubkey);
     }
 
-    function simulateRewards(uint16 index, uint256 amount) public {
+    function simulateRewards(bytes memory pubkey, uint256 amount) public {
+        uint256 index = getValidatorIndex(pubkey);
         require(index < validators.length, "Invalid validator index");
         Validator storage validator = validators[index];
         require(validator.status == ValidatorStatus.ACTIVE, "Validator must be ACTIVE to receive rewards");
@@ -219,7 +219,9 @@ contract BeaconChain {
         validator.amount += amount;
 
         // Distribute rewards using RewardDistributor
-        rewardDistributor.distributeRewards(address(this), amount);
+        REWARD_DISTRIBUTOR.distributeRewards(address(this), amount);
+
+        emit BeaconChain___RewardsDistributed(pubkey, amount);
     }
 
     ////////////////////////////////////////////////////
@@ -232,6 +234,8 @@ contract BeaconChain {
         require(validator.amount >= amount, "Insufficient validator balance");
 
         withdrawQueue.push(Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0) }));
+
+        emit BeaconChain___Withdraw(pubkey, amount);
     }
 
     function processWithdraw(
@@ -258,10 +262,13 @@ contract BeaconChain {
         (bool success,) = validator.owner.call{ value: pendingWithdrawal.amount }("");
         require(success, "Withdrawal transfer failed");
 
+        emit BeaconChain___WithdrawProcessed(pubkey, pendingWithdrawal.amount);
+
         // If validator amount is less than 16 ETH, move validator to exit queue
         if (validator.amount < ACTIVATION_AMOUNT / 2) {
             validator.status = ValidatorStatus.EXITED;
             exitQueue.push(Queue({ pubkey: pubkey, timestamp: uint64(block.timestamp), amount: 0, owner: validator.owner }));
+            emit BeaconChain___Exit(pubkey, validator.amount);
         }
     }
 
@@ -286,6 +293,8 @@ contract BeaconChain {
 
         // Validator can now be marked as WITHDRAWABLE
         validator.status = ValidatorStatus.WITHDRAWABLE;
+
+        emit BeaconChain___ValidatorWithdrawable(pubkey);
     }
 
     /// @notice Get through all active validators and process:
@@ -304,6 +313,7 @@ contract BeaconChain {
                     // Transfer excess ETH to the validator owner
                     (bool success,) = validator.owner.call{ value: excess }("");
                     require(success, "Excess transfer failed");
+                    emit BeaconChain___Sweep(validator.pubkey, excess);
                 }
             }
             if (status == ValidatorStatus.EXITED) continue;
@@ -315,12 +325,14 @@ contract BeaconChain {
                     // Transfer all ETH to the validator owner
                     (bool success,) = validator.owner.call{ value: excess }("");
                     require(success, "Withdrawable transfer failed");
+                    emit BeaconChain___WithdrawProcessed(validator.pubkey, excess);
                 }
             }
         }
     }
 
-    function slash(uint16 index, uint256 amount) public {
+    function slash(bytes memory pubkey, uint256 amount) public {
+        uint256 index = getValidatorIndex(pubkey);
         require(index < validators.length, "Invalid validator index");
         Validator storage validator = validators[index];
         require(validator.amount >= amount, "Insufficient validator balance to slash");
@@ -333,12 +345,15 @@ contract BeaconChain {
         (bool success,) = SLASHING_REWARD_RECIPIENT.call{ value: amount }("");
         require(success, "Slashing transfer failed");
 
+        emit BeaconChain___ValidatorSlashed(pubkey, amount);
+
         // If validator amount is less than 16 ETH, move validator to exit queue
         if (validator.amount < MIN_EXIT_AMOUNT) {
             validator.status = ValidatorStatus.EXITED;
             exitQueue.push(
                 Queue({ pubkey: validator.pubkey, timestamp: uint64(block.timestamp), amount: 0, owner: validator.owner })
             );
+            emit BeaconChain___Exit(pubkey, validator.amount);
         }
     }
 
@@ -368,20 +383,40 @@ contract BeaconChain {
         return validators;
     }
 
+    function getValidatorLength() external view returns (uint256) {
+        return validators.length;
+    }
+
     function getDepositQueue() external view returns (Queue[] memory) {
         return depositQueue;
+    }
+
+    function getDepositQueueLength() external view returns (uint256) {
+        return depositQueue.length;
     }
 
     function getPendingQueue() external view returns (Queue[] memory) {
         return pendingQueue;
     }
 
+    function getPendingQueueLength() external view returns (uint256) {
+        return pendingQueue.length;
+    }
+
     function getWithdrawQueue() external view returns (Queue[] memory) {
         return withdrawQueue;
     }
 
+    function getWithdrawQueueLength() external view returns (uint256) {
+        return withdrawQueue.length;
+    }
+
     function getExitQueue() external view returns (Queue[] memory) {
         return exitQueue;
+    }
+
+    function getExitQueueLength() external view returns (uint256) {
+        return exitQueue.length;
     }
 
     function getValidatorIndex(
