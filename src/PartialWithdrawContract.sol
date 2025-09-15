@@ -28,18 +28,31 @@ contract PartialWithdrawContract {
 
         if (data.length == 0) return abi.encode(beaconChain.fee());
 
-        require(data.length == 10, "Data must be exactly 10 bytes");
+        uint8 validatorPubKeyLength = 48;
+        // 48 bytes pubkey + 8 bytes amount
+        require(data.length == (validatorPubKeyLength + 8), "Data must be exactly 56 bytes");
 
         // Decode msg.data to (bytes, uint64)
-        bytes2 pubkey;
+        bytes memory pubkey = new bytes(validatorPubKeyLength);
         uint64 amount;
         assembly {
-            let lastBytes := mload(add(data, 34))
-            pubkey := mload(add(data, 32))
-            amount := shr(192, lastBytes)
-        }
-        beaconChain.withdraw(abi.encodePacked(pubkey), amount);
+            // Copy the bytes
+            let src := add(data, 32)
+            let dest := add(pubkey, 32)
 
+            // Copy the data in 32-byte words
+            let words := div(add(validatorPubKeyLength, 31), 32)
+            for { let i := 0 } lt(i, words) { i := add(i, 1) } { mstore(add(dest, mul(i, 32)), mload(add(src, mul(i, 32)))) }
+
+            // Extract the uint64 from position validatorPubKeyLength
+            let uint64Position := add(add(data, 32), validatorPubKeyLength)
+            let uint64Word := mload(uint64Position)
+            // Shift to align the 8 bytes of the uint64
+            let shift := mul(sub(32, 8), 8) // 192 bits
+            amount := shr(shift, uint64Word)
+        }
+
+        beaconChain.withdraw(pubkey, amount);
         return "";
     }
 }

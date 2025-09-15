@@ -5,11 +5,13 @@ pragma solidity 0.8.29;
 import { Test } from "@forge-std/Test.sol";
 
 // Contract to test
+import { Cluster } from "@origin-dollar/interfaces/ISSVNetwork.sol";
 import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
 import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxies.sol";
 
 // Mocks
 import { WETH } from "@solmate/tokens/WETH.sol";
+import { ERC20 } from "@solmate/tokens/ERC20.sol";
 import { SSVNetwork } from "../src/SSVNetwork.sol";
 import { BeaconRoot } from "../src/BeaconRoot.sol";
 import { BeaconChain } from "../src/BeaconChain.sol";
@@ -18,7 +20,10 @@ import { DepositContract } from "../src/DepositContract.sol";
 import { RewardDistributor } from "../src/RewardDistributor.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 
-contract Base is Test {
+// Utils
+import { ValidatorSet } from "./ValidatorSet.sol";
+
+contract Base is Test, ValidatorSet {
     ////////////////////////////////////////////////////
     /// --- CONSTANTS & IMMUTABLES
     ////////////////////////////////////////////////////
@@ -37,16 +42,10 @@ contract Base is Test {
     address public governor = makeAddr("governor");
     address public operator = makeAddr("operator");
 
-    // Validator pubkeys for testing, should be exactly 2 bytes long!
-    bytes public validator1 = hex"0001";
-    bytes public validator2 = hex"0002";
-    bytes public validator3 = hex"0003";
-    bytes public validator4 = hex"0004";
-    bytes public validator5 = hex"0005";
-
     // Mock
-    address public ssv = makeAddr("ssv");
     address public oethVault = makeAddr("oethVault");
+
+    Cluster public emptyCluster = Cluster(0, 0, 0, false, 0);
 
     ////////////////////////////////////////////////////
     /// --- CONTRACTS & MOCKS
@@ -57,6 +56,7 @@ contract Base is Test {
 
     // Mocks
     WETH public weth;
+    ERC20 public ssv;
     SSVNetwork public ssvNetwork;
     BeaconRoot public beaconRoot;
     BeaconChain public beaconChain;
