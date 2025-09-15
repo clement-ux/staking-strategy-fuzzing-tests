@@ -12,6 +12,7 @@ import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxi
 import { WETH } from "@solmate/tokens/WETH.sol";
 import { SSVNetwork } from "../src/SSVNetwork.sol";
 import { BeaconChain } from "../src/BeaconChain.sol";
+import { BeaconProofs } from "../src/BeaconProofs.sol";
 import { DepositContract } from "../src/DepositContract.sol";
 import { RewardDistributor } from "../src/RewardDistributor.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
@@ -44,7 +45,6 @@ contract Base is Test {
     // Mock
     address public ssv = makeAddr("ssv");
     address public oethVault = makeAddr("oethVault");
-    address public beaconProofs = makeAddr("beaconProofs"); // Todo
 
     ////////////////////////////////////////////////////
     /// --- CONTRACTS & MOCKS
@@ -57,6 +57,7 @@ contract Base is Test {
     WETH public weth;
     SSVNetwork public ssvNetwork;
     BeaconChain public beaconChain;
+    BeaconProofs public beaconProofs;
     DepositContract public depositContract;
     RewardDistributor public rewardDistributor;
     PartialWithdrawContract public partialWithdrawContract;
