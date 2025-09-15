@@ -140,13 +140,30 @@ contract Setup is Base {
     function _initiliaze() private {
         vm.prank(governor);
         strategy.setRegistrator(operator);
+
+        deal(address(weth), 1_000_000 ether);
     }
 
     //////////////////////////////////////////////////////
     /// --- LABELS
     //////////////////////////////////////////////////////
     function _labelAddresses() private {
+        // Strategy
         vm.label(address(strategy), "CompoundingStakingSSVStrategy");
         vm.label(address(strategyProxy), "CompoundingStakingSSVStrategy Proxy");
+
+        // Mocks
+        vm.label(address(beaconRoot), "BeaconRoot");
+        vm.label(address(beaconChain), "BeaconChain");
+        vm.label(address(beaconProofs), "BeaconProofs");
+        vm.label(address(depositContract), "Beacon_DepositContract");
+        vm.label(address(partialWithdrawContract), "Beacon_PartialWithdrawContract");
+        vm.label(address(ssvNetwork), "SSVNetwork");
+        vm.label(address(rewardDistributor), "RewardDistributor");
+
+        // Tokens
+        vm.label(address(weth), "WETH");
+        vm.label(address(ssv), "SSV Token");
+        vm.label(address(oethVault), "OETH Vault");
     }
 }

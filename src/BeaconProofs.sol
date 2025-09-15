@@ -22,11 +22,14 @@ contract BeaconProofs {
     /// --- MOCK FUNCTIONS
     ////////////////////////////////////////////////////
     function merkleizePendingDeposit(
-        bytes memory, /*pubkey*/
-        bytes memory, /*withdrawalCredentials*/
-        bytes memory, /*signature*/
-        uint64 /*amount*/
-    ) public pure returns (bytes32) { }
+        bytes32 pubKeyHash,
+        bytes calldata withdrawalCredentials,
+        uint64 amountGwei,
+        bytes calldata signature,
+        uint64 slot
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(pubKeyHash, withdrawalCredentials, amountGwei, signature, slot));
+    }
 
     function verifyValidator(
         bytes32, /*beaconBlockRoot*/
