@@ -12,6 +12,7 @@ import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxi
 // Mocks
 import { WETH } from "@solmate/tokens/WETH.sol";
 import { SSVNetwork } from "../src/SSVNetwork.sol";
+import { BeaconRoot } from "../src/BeaconRoot.sol";
 import { BeaconChain } from "../src/BeaconChain.sol";
 import { BeaconProofs } from "../src/BeaconProofs.sol";
 import { DepositContract } from "../src/DepositContract.sol";
@@ -71,8 +72,10 @@ contract Setup is Base {
         beaconProofs = new BeaconProofs(address(beaconChain));
 
         // Deploy DepositContract and PartialWithdrawContract to their respective addresses on mainnet
+        deployCodeTo("BeaconRoot.sol", abi.encode(), BEACON_ROOTS_ADDRESS);
         deployCodeTo("DepositContract.sol", abi.encode(address(beaconChain)), DEPOSIT_CONTRACT_ADDRESS);
         deployCodeTo("PartialWithdrawContract.sol", abi.encode(address(beaconChain)), WITHDRAWAL_REQUEST_ADDRESS);
+        beaconRoot = BeaconRoot(payable(BEACON_ROOTS_ADDRESS));
         depositContract = DepositContract(payable(DEPOSIT_CONTRACT_ADDRESS));
         partialWithdrawContract = PartialWithdrawContract(payable(WITHDRAWAL_REQUEST_ADDRESS));
 
