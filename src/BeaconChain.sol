@@ -86,8 +86,12 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     /// --- DEPOSIT FUNCTIONS
     ////////////////////////////////////////////////////
+    /// @notice Accepts ETH sent directly to the contract.
     receive() external payable { }
 
+    /// @notice Deposit ETH for a validator.
+    /// @param pubkey The public key of the validator.
+    /// @dev Requires validator to be registered in SSVNetwork and deposit >= 1 ETH.
     function deposit(
         bytes calldata pubkey,
         bytes calldata, /*withdrawal_credentials*/
@@ -102,8 +106,16 @@ contract BeaconChain {
         emit BeaconChain___Deposit(pubkey, msg.value);
     }
 
+    /// @notice Processes the first pending deposit in the deposit queue (FIFO).
+    function processDeposit() public {
+        require(depositQueue.length > 0, "No pending deposits");
+        processDeposit(0);
+    }
+
     /// @param index The index of the deposit to process, should be always 0 to process in FIFO order, but can be any index
     /// to allow flexibility
+    /// @notice Processes a deposit from the deposit queue.
+    /// @param index The index of the deposit to process (FIFO recommended).
     function processDeposit(
         uint256 index
     ) public {
@@ -175,8 +187,16 @@ contract BeaconChain {
         }
     }
 
+    /// @notice Processes the first pending validator in the pending queue (FIFO).
+    function activateValidator() public {
+        require(pendingQueue.length > 0, "No pending validators");
+        activateValidator(0);
+    }
+
     /// @param index The index of the pending validator to activate, should be always 0 to process in FIFO order, but can be
     /// any index to allow flexibility
+    /// @notice Activates a pending validator if it has enough ETH.
+    /// @param index The index of the pending validator to activate (FIFO recommended).
     function activateValidator(
         uint256 index
     ) public {
@@ -217,6 +237,10 @@ contract BeaconChain {
     /// --- WITHDRAW FUNCTIONS
     ////////////////////////////////////////////////////
 
+    /// @notice Request withdrawal of ETH from a validator.
+    /// @param pubkey The public key of the validator.
+    /// @param amount The amount to withdraw.
+    /// @dev Only the owner can request withdrawal.
     function withdraw(bytes calldata pubkey, uint256 amount) external {
         Validator memory validator = validators[getValidatorIndex(pubkey)];
         require(validator.owner == msg.sender, "Only owner can request withdrawal");
@@ -227,6 +251,14 @@ contract BeaconChain {
         emit BeaconChain___Withdraw(pubkey, amount);
     }
 
+    /// @notice Processes the first pending withdrawal in the withdraw queue (FIFO).
+    function processWithdraw() public {
+        require(withdrawQueue.length > 0, "No pending withdrawals");
+        processWithdraw(0);
+    }
+
+    /// @notice Processes a withdrawal from the withdraw queue.
+    /// @param index The index of the withdrawal to process.
     function processWithdraw(
         uint256 index
     ) public {
@@ -261,6 +293,14 @@ contract BeaconChain {
         }
     }
 
+    /// @notice Processes the first pending exit in the exit queue (FIFO).
+    function processExit() public {
+        require(exitQueue.length > 0, "No pending exits");
+        processExit(0);
+    }
+
+    /// @notice Processes an exit from the exit queue.
+    /// @param index The index of the exit to process.
     function processExit(
         uint256 index
     ) public {
@@ -288,6 +328,7 @@ contract BeaconChain {
 
     /// @notice Get through all active validators and process:
     /// - removed all amount above 2048 ETH, assuming only 0x02 validators
+    /// @notice Sweeps excess ETH from active and withdrawable validators, transferring to owners.
     function processSweep() public {
         for (uint256 i = 0; i < validators.length; i++) {
             Validator storage validator = validators[i];
@@ -323,6 +364,8 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     /// --- VALIDATORS MANAGEMENT FUNCTIONS
     ////////////////////////////////////////////////////
+    /// @notice Registers a validator in the SSVNetwork.
+    /// @param pubkey The public key of the validator.
     function registerSsvValidator(
         bytes memory pubkey
     ) public {
@@ -332,6 +375,9 @@ contract BeaconChain {
         emit SSVNetwork___ValidatorRegistered(pubkey);
     }
 
+    /// @notice Removes a validator from the SSVNetwork.
+    /// @param pubkey The public key of the validator.
+    /// @dev Validator must have zero balance and not be withdrawable.
     function removeSsvValidator(
         bytes memory pubkey
     ) public {
@@ -344,6 +390,9 @@ contract BeaconChain {
         emit SSVNetwork___ValidatorRemoved(pubkey);
     }
 
+    /// @notice Simulates reward distribution to a validator.
+    /// @param pubkey The public key of the validator.
+    /// @param amount The amount of rewards to distribute.
     function simulateRewards(bytes memory pubkey, uint256 amount) public {
         uint256 index = getValidatorIndex(pubkey);
         require(index < validators.length, "Invalid validator index");
@@ -359,6 +408,9 @@ contract BeaconChain {
         emit BeaconChain___RewardsDistributed(pubkey, amount);
     }
 
+    /// @notice Slashes a validator by reducing its balance and sending ETH to the slashing reward recipient.
+    /// @param pubkey The public key of the validator.
+    /// @param amount The amount to slash.
     function slash(bytes memory pubkey, uint256 amount) public {
         uint256 index = getValidatorIndex(pubkey);
         require(index < validators.length, "Invalid validator index");
@@ -385,11 +437,15 @@ contract BeaconChain {
         }
     }
 
+    /// @notice Returns the protocol fee (not implemented).
     function fee() external pure returns (uint256) { }
 
     ////////////////////////////////////////////////////
     /// --- HELPER FUNCTIONS
     ////////////////////////////////////////////////////
+    /// @notice Removes an element from a queue at a given index, preserving order.
+    /// @param list The queue to remove from.
+    /// @param index The index to remove.
     function _removeFromList(Queue[] storage list, uint256 index) internal {
         if (list.length == 0) return;
         require(index < list.length, "Invalid index");
@@ -402,6 +458,9 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     /// --- VIEW FUNCTIONS
     ////////////////////////////////////////////////////
+    /// @notice Returns a validator by index.
+    /// @param index The index of the validator.
+    /// @return The validator struct.
     function getValidator(
         uint256 index
     ) external view returns (Validator memory) {
@@ -409,46 +468,59 @@ contract BeaconChain {
         return validators[index];
     }
 
+    /// @notice Returns all validators.
     function getValidators() external view returns (Validator[] memory) {
         return validators;
     }
 
+    /// @notice Returns the number of validators.
     function getValidatorLength() external view returns (uint256) {
         return validators.length;
     }
 
+    /// @notice Returns the deposit queue.
     function getDepositQueue() external view returns (Queue[] memory) {
         return depositQueue;
     }
 
+    /// @notice Returns the length of the deposit queue.
     function getDepositQueueLength() external view returns (uint256) {
         return depositQueue.length;
     }
 
+    /// @notice Returns the pending queue.
     function getPendingQueue() external view returns (Queue[] memory) {
         return pendingQueue;
     }
 
+    /// @notice Returns the length of the pending queue.
     function getPendingQueueLength() external view returns (uint256) {
         return pendingQueue.length;
     }
 
+    /// @notice Returns the withdraw queue.
     function getWithdrawQueue() external view returns (Queue[] memory) {
         return withdrawQueue;
     }
 
+    /// @notice Returns the length of the withdraw queue.
     function getWithdrawQueueLength() external view returns (uint256) {
         return withdrawQueue.length;
     }
 
+    /// @notice Returns the exit queue.
     function getExitQueue() external view returns (Queue[] memory) {
         return exitQueue;
     }
 
+    /// @notice Returns the length of the exit queue.
     function getExitQueueLength() external view returns (uint256) {
         return exitQueue.length;
     }
 
+    /// @notice Returns the index of a validator by public key.
+    /// @param pubkey The public key of the validator.
+    /// @return The index of the validator, or NOT_FOUND if not found.
     function getValidatorIndex(
         bytes memory pubkey
     ) public view returns (uint256) {
