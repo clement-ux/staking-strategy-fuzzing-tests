@@ -530,3 +530,17 @@ contract BeaconChain {
         return NOT_FOUND; // Not found
     }
 }
+
+// --- List of actions ---
+// processDeposit
+// activateValidator
+// processExit
+// processWithdraw
+// processSweep
+// simulateRewards
+// slash
+
+// --- Process epoch ---
+// activate validators
+// process slashing
+// process deposits

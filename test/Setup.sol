@@ -38,11 +38,6 @@ contract Setup is Base {
 
         // 5. Initialize users and contracts.
         //_initiliaze();
-        beaconChain.registerSsvValidator(validator1);
-        beaconChain.registerSsvValidator(validator2);
-        beaconChain.registerSsvValidator(validator3);
-        beaconChain.registerSsvValidator(validator4);
-        beaconChain.registerSsvValidator(validator5);
     }
 
     //////////////////////////////////////////////////////
@@ -112,4 +107,9 @@ contract Setup is Base {
             GENESIS_TIMESTAMP
         );
     }
+
+    //////////////////////////////////////////////////////
+    /// --- INITIALIZATION
+    //////////////////////////////////////////////////////
+    function _initiliaze() private { }
 }

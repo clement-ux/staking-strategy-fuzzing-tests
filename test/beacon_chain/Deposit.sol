@@ -13,9 +13,9 @@ contract Deposit_Test is Setup {
 
         // Deposit
         vm.startPrank(alice);
-        beaconChain.deposit{ value: depositAmount * 10 }(validator1, "", "", "");
-        beaconChain.deposit{ value: depositAmount * 22 }(validator1, "", "", "");
-        beaconChain.deposit{ value: depositAmount * 12 }(validator2, "", "", "");
+        beaconChain.deposit{ value: depositAmount * 10 }(VALIDATOR_1, "", "", "");
+        beaconChain.deposit{ value: depositAmount * 22 }(VALIDATOR_1, "", "", "");
+        beaconChain.deposit{ value: depositAmount * 12 }(VALIDATOR_2, "", "", "");
 
         // Check deposit queue
         beaconChain.getDepositQueue();
@@ -36,14 +36,14 @@ contract Deposit_Test is Setup {
         checkValidatorState();
 
         // Withdraw from validator 1
-        beaconChain.withdraw(validator1, depositAmount * 5);
+        beaconChain.withdraw(VALIDATOR_1, depositAmount * 5);
         beaconChain.processWithdraw(0);
 
         // Check validator state
         checkValidatorState();
 
         // Withdraw more than remaining balance
-        beaconChain.withdraw(validator1, depositAmount * 18);
+        beaconChain.withdraw(VALIDATOR_1, depositAmount * 18);
         beaconChain.processWithdraw(0);
 
         // Check validator state
@@ -62,7 +62,7 @@ contract Deposit_Test is Setup {
         checkValidatorState();
 
         // Deposit more to validator 2
-        beaconChain.deposit{ value: depositAmount * 2035 }(validator2, "", "", "");
+        beaconChain.deposit{ value: depositAmount * 2035 }(VALIDATOR_2, "", "", "");
         checkValidatorState();
 
         beaconChain.processDeposit(0);
@@ -73,7 +73,7 @@ contract Deposit_Test is Setup {
         checkValidatorState();
 
         // Simulate some rewards on validator 2
-        beaconChain.simulateRewards(validator2, 2 ether);
+        beaconChain.simulateRewards(VALIDATOR_2, 2 ether);
 
         // Check validator state
         checkValidatorState();
@@ -85,7 +85,7 @@ contract Deposit_Test is Setup {
         checkValidatorState();
 
         // Slash validator 2 by 2040 ether
-        beaconChain.slash(validator2, 2040 ether);
+        beaconChain.slash(VALIDATOR_2, 2040 ether);
 
         beaconChain.processExit(0);
         beaconChain.processSweep();
