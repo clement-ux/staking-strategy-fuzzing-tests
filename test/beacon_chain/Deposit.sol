@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { BaseTest } from "../BaseTest.sol";
+import { Setup } from "../Setup.sol";
 
-contract Deposit_Test is BaseTest {
+contract Deposit_Test is Setup {
     function setUp() public virtual override {
         super.setUp();
     }
