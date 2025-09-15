@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { console } from "@forge-std/console.sol";
+
 // Base
 import { Base } from "./Base.sol";
 
@@ -11,6 +13,8 @@ import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxi
 
 // Mocks
 import { WETH } from "@solmate/tokens/WETH.sol";
+import { ERC20 } from "@solmate/tokens/ERC20.sol";
+import { MockERC20 } from "@solmate/test/utils/mocks/MockERC20.sol";
 import { SSVNetwork } from "../src/SSVNetwork.sol";
 import { BeaconRoot } from "../src/BeaconRoot.sol";
 import { BeaconChain } from "../src/BeaconChain.sol";
@@ -37,7 +41,10 @@ contract Setup is Base {
         _deployContracts();
 
         // 5. Initialize users and contracts.
-        //_initiliaze();
+        _initiliaze();
+
+        // 6. Label addresses for clarity in traces.
+        _labelAddresses();
     }
 
     //////////////////////////////////////////////////////
@@ -81,7 +88,8 @@ contract Setup is Base {
         rewardDistributor = beaconChain.REWARD_DISTRIBUTOR();
         deal(address(beaconChain.REWARD_DISTRIBUTOR()), 1_000_000 ether);
 
-        // Deploy WETH mock
+        // Deploy WETH and SSV token
+        ssv = ERC20(address(new MockERC20("SSV Token", "SSV", 18)));
         weth = new WETH();
     }
 
@@ -106,10 +114,39 @@ contract Setup is Base {
             address(beaconProofs),
             GENESIS_TIMESTAMP
         );
+
+        // ---
+        // --- 3. Initialize proxy.
+        strategyProxy.initialize(
+            address(strategy),
+            address(governor),
+            abi.encodeWithSelector(
+                CompoundingStakingSSVStrategy.initialize.selector,
+                new address[](0), // _rewardTokenAddresses Not used so empty array
+                new address[](0), // _assets Not used so empty array
+                new address[](0) // _pTokens Not used so empty array
+            )
+        );
+
+        // Set logic contract on proxy
+        strategy = CompoundingStakingSSVStrategy(payable(address(strategyProxy)));
+
+        vm.stopPrank();
     }
 
     //////////////////////////////////////////////////////
     /// --- INITIALIZATION
     //////////////////////////////////////////////////////
-    function _initiliaze() private { }
+    function _initiliaze() private {
+        vm.prank(governor);
+        strategy.setRegistrator(operator);
+    }
+
+    //////////////////////////////////////////////////////
+    /// --- LABELS
+    //////////////////////////////////////////////////////
+    function _labelAddresses() private {
+        vm.label(address(strategy), "CompoundingStakingSSVStrategy");
+        vm.label(address(strategyProxy), "CompoundingStakingSSVStrategy Proxy");
+    }
 }
