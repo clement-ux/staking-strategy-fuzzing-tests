@@ -28,8 +28,8 @@ contract Deposit_Test is Setup {
         beaconChain.getDepositQueue();
 
         // Process deposits
-        beaconChain.processDeposit(0);
-        beaconChain.processDeposit(0);
+        beaconChain.processDeposit();
+        beaconChain.processDeposit();
 
         // Check validator state
         checkValidatorState();
@@ -72,8 +72,8 @@ contract Deposit_Test is Setup {
         beaconChain.deposit{ value: depositAmount * 2035 }(validator2.pubkey, aliceWithdrawalCredentials, "", "");
         checkValidatorState();
 
-        beaconChain.processDeposit(0);
-        beaconChain.processDeposit(0);
+        beaconChain.processDeposit();
+        beaconChain.processDeposit();
         beaconChain.activateValidators();
 
         // Check validator state

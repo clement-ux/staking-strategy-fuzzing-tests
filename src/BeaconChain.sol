@@ -110,33 +110,21 @@ contract BeaconChain {
         emit BeaconChain___Deposit(pubkey, msg.value);
     }
 
-    /// @notice Processes the first pending deposit in the deposit queue (FIFO).
-    function processDeposit() public {
-        require(depositQueue.length > 0, "No pending deposits");
-        processDeposit(0);
-    }
-
-    /// @param index The index of the deposit to process, should be always 0 to process in FIFO order, but can be any index
-    /// to allow flexibility
     /// @notice Processes a deposit from the deposit queue.
-    /// @param index The index of the deposit to process (FIFO recommended).
-    function processDeposit(
-        uint256 index
-    ) public {
-        // Ensure the index is within bounds
-        require(index < depositQueue.length, "Invalid deposit index");
+    function processDeposit() public {
+        if (depositQueue.length == 0) return; // No pending deposits
 
-        // Store deposit in memory to avoid multiple SLOADs
-        Queue memory pendingDeposit = depositQueue[index];
+        // Store first deposit in memory to avoid multiple SLOADs
+        Queue memory pendingDeposit = depositQueue[0];
 
         // Remove deposit from depositQueue and conserve order, by shifting elements from right to left
-        _removeFromList(depositQueue, index);
+        _removeFromList(depositQueue, 0);
 
         bytes memory pubkey = pendingDeposit.pubkey;
 
         // Get the validator index corresponding to the pubkey, if it exists
         // It is same to reuse `index` variable as not used anymore
-        index = getValidatorIndex(pubkey);
+        uint256 index = getValidatorIndex(pubkey);
 
         // --- 1. Validator doesn't exist for this pubkey, create it and add amount
         if (index == NOT_FOUND) {
@@ -169,6 +157,18 @@ contract BeaconChain {
         // --- 2.c. Validator exists and is either DEPOSITED, ACTIVE or WITHDRAWABLE: increase stake
         validator.amount += pendingDeposit.amount;
         emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount, currentStatus);
+    }
+
+    /// @notice Processes multiple deposits from the deposit queue.
+    /// @param count The number of deposits to process.
+    /// @dev Processes up to `count` deposits, or all if `count` exceeds the queue length.
+    function processDeposits(
+        uint256 count
+    ) public {
+        uint256 len = min(depositQueue.length, count);
+        for (uint256 i; i < len; i++) {
+            processDeposit();
+        }
     }
 
     /// @notice Goes through all validators and activates those that are `DEPOSITED` and have enough ETH.
@@ -416,6 +416,14 @@ contract BeaconChain {
 
         // forge-lint: disable-next-line(unsafe-typecast)
         return address(uint160(uint256(bytes32(withdrawalCredentials))));
+    }
+
+    /// @notice Returns the minimum of two uint256 values.
+    /// @param a The first value.
+    /// @param b The second value.
+    /// @return The minimum value.
+    function min(uint256 a, uint256 b) public pure returns (uint256) {
+        return a < b ? a : b;
     }
 
     ////////////////////////////////////////////////////
