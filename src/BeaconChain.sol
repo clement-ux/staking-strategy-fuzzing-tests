@@ -82,6 +82,10 @@ contract BeaconChain {
     event BeaconChain___Sweep(bytes pubkey, uint256 amount);
     event BeaconChain___RewardsDistributed(bytes to, uint256 amount);
 
+    // Errors (labeled as event to prevent revert)
+    event INSUFFICIENT_VALIDATOR_BALANCE(bytes pubkey, uint256 available, uint256 requested);
+    event ONLY_OWNER_CAN_REQUEST_WITHDRAWAL(bytes pubkey, address owner, address requester);
+
     ////////////////////////////////////////////////////
     /// --- DEPOSIT FUNCTIONS
     ////////////////////////////////////////////////////
@@ -201,32 +205,21 @@ contract BeaconChain {
     function withdraw(bytes calldata pubkey, uint256 amount) external {
         Validator memory validator = validators[getValidatorIndex(pubkey)];
         if (validator.status != ValidatorStatus.ACTIVE) return; // Only ACTIVE validators can request withdrawal
-        require(validator.owner == msg.sender, "Only owner can request withdrawal");
-        require(validator.amount >= amount, "Insufficient validator balance");
 
         withdrawQueue.push(Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0) }));
 
         emit BeaconChain___Withdraw(pubkey, amount);
     }
 
-    /// @notice Processes the first pending withdrawal in the withdraw queue (FIFO).
-    function processWithdraw() public {
-        require(withdrawQueue.length > 0, "No pending withdrawals");
-        processWithdraw(0);
-    }
-
     /// @notice Processes a withdrawal from the withdraw queue.
-    /// @param index The index of the withdrawal to process.
-    function processWithdraw(
-        uint256 index
-    ) public {
-        require(index < withdrawQueue.length, "Invalid withdrawal index");
+    function processWithdraw() public {
+        if (withdrawQueue.length == 0) return; // No pending withdrawals
 
         // Store withdrawal in memory to avoid multiple SLOADs
-        Queue memory pendingWithdrawal = withdrawQueue[index];
+        Queue memory pendingWithdrawal = withdrawQueue[0];
 
         // Remove withdrawal from withdrawQueue and conserve order, by shifting elements from right to left
-        _removeFromList(withdrawQueue, index);
+        _removeFromList(withdrawQueue, 0);
 
         bytes memory pubkey = pendingWithdrawal.pubkey;
 
@@ -234,7 +227,14 @@ contract BeaconChain {
         Validator storage validator = validators[getValidatorIndex(pubkey)];
 
         // Ensure the validator has enough balance and deduct the amount
-        require(validator.amount >= pendingWithdrawal.amount, "Insufficient validator balance");
+        if (validator.amount < pendingWithdrawal.amount + ACTIVATION_AMOUNT) {
+            emit INSUFFICIENT_VALIDATOR_BALANCE(pubkey, validator.amount, pendingWithdrawal.amount);
+            return; // Incorrect withdraw request, ignored
+        }
+        if (validator.owner != msg.sender) {
+            emit ONLY_OWNER_CAN_REQUEST_WITHDRAWAL(pubkey, validator.owner, msg.sender);
+            return; // Only owner can request withdrawal, ignored
+        }
         validator.amount -= pendingWithdrawal.amount;
 
         // Transfer ETH to the validator owner
