@@ -44,20 +44,17 @@ contract Deposit_Test is Setup {
 
         // Withdraw from validator 1
         beaconChain.withdraw(validator1.pubkey, depositAmount * 5);
-        beaconChain.processWithdraw(0);
+        beaconChain.processWithdraw();
 
         // Check validator state
         checkValidatorState();
 
         // Withdraw more than remaining balance
         beaconChain.withdraw(validator1.pubkey, depositAmount * 18);
-        beaconChain.processWithdraw(0);
+        beaconChain.processWithdraw();
 
         // Check validator state
         checkValidatorState();
-
-        // Process exit
-        beaconChain.processExit(0);
 
         // Check validator state
         checkValidatorState();
@@ -94,7 +91,6 @@ contract Deposit_Test is Setup {
         // Slash validator 2 by 2040 ether
         beaconChain.slash(validator2.pubkey, 2040 ether);
 
-        beaconChain.processExit(0);
         beaconChain.processSweep();
 
         vm.stopPrank();
@@ -103,7 +99,6 @@ contract Deposit_Test is Setup {
     function checkValidatorState() public view {
         beaconChain.getDepositQueue();
         beaconChain.getWithdrawQueue();
-        beaconChain.getExitQueue();
         beaconChain.getValidators();
     }
 

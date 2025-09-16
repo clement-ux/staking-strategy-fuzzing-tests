@@ -53,7 +53,6 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     /// --- STORAGE
     ////////////////////////////////////////////////////
-    Queue[] public exitQueue;
     Queue[] public depositQueue;
     Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
@@ -62,17 +61,19 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     /// --- ERRORS & EVENTS
     ////////////////////////////////////////////////////
+    // Todo: to simplify status event, create an event StatusChanged(pubkey, oldStatus, newStatus)
     // Deposit events
     event BeaconChain___Deposit(bytes pubkey, uint256 amount);
     event BeaconChain___DepositProcessed(bytes pubkey, uint256 amoun, ValidatorStatus status);
     event BeaconChain___Withdraw(bytes pubkey, uint256 amount);
+    event BeaconChain___PartialWithdrawProcessed(bytes pubkey, uint256 amount);
     event BeaconChain___WithdrawProcessed(bytes pubkey, uint256 amount);
-    event BeaconChain___Exit(bytes pubkey, uint256 remainingAmount);
+    event BeaconChain___Exited(bytes pubkey, uint256 remainingAmount);
 
     // Validators events
     event BeaconChain___ValidatorCreated(bytes pubkey);
     event BeaconChain___ValidatorActivated(bytes pubkey, uint256 amount);
-    event BeaconChain___ValidatorExited(bytes pubkey);
+    event BeaconChain___ValidatorExited(bytes pubkey, uint256 remainingAmount);
     event BeaconChain___ValidatorWithdrawable(bytes pubkey);
     event BeaconChain___ValidatorSlashed(bytes pubkey, uint256 amount);
 
@@ -226,67 +227,91 @@ contract BeaconChain {
         // Get the validator index corresponding to the pubkey, it must exist
         Validator storage validator = validators[getValidatorIndex(pubkey)];
 
+        // Ensure only the owner can request withdrawal
+        if (validator.owner != msg.sender) {
+            emit ONLY_OWNER_CAN_REQUEST_WITHDRAWAL(pubkey, validator.owner, msg.sender);
+            return; // Only owner can request withdrawal, ignored
+        }
+
+        // There is two option, partial or full withdrawal
+        // 1. Partial withdrawal:
+        if (validator.amount > pendingWithdrawal.amount && validator.amount - pendingWithdrawal.amount >= ACTIVATION_AMOUNT)
+        {
+            // Reduce instantly the validator amount
+            validator.amount -= pendingWithdrawal.amount;
+
+            // Transfer ETH to the validator owner
+            (bool success,) = validator.owner.call{ value: pendingWithdrawal.amount }("");
+            require(success, "Withdrawal transfer failed");
+
+            emit BeaconChain___PartialWithdrawProcessed(pubkey, pendingWithdrawal.amount);
+            return; // Partial withdrawal processed
+        }
+
+        // 2. Full withdrawal:
+        if (validator.amount == pendingWithdrawal.amount) {
+            // Only mark the validator as EXITED, actual withdrawal will be processed in sweep
+            validator.status = ValidatorStatus.EXITED;
+            emit BeaconChain___ValidatorExited(pubkey, validator.amount);
+        }
+
         // Ensure the validator has enough balance and deduct the amount
         if (validator.amount < pendingWithdrawal.amount) {
             emit INSUFFICIENT_VALIDATOR_BALANCE(pubkey, validator.amount, pendingWithdrawal.amount);
             return; // Incorrect withdraw request, ignored
         }
-        if (validator.owner != msg.sender) {
-            emit ONLY_OWNER_CAN_REQUEST_WITHDRAWAL(pubkey, validator.owner, msg.sender);
-            return; // Only owner can request withdrawal, ignored
-        }
-        validator.amount -= pendingWithdrawal.amount;
-
-        // Transfer ETH to the validator owner
-        (bool success,) = validator.owner.call{ value: pendingWithdrawal.amount }("");
-        require(success, "Withdrawal transfer failed");
 
         emit BeaconChain___WithdrawProcessed(pubkey, pendingWithdrawal.amount);
+    }
 
-        // If validator amount is less than 16 ETH, move validator to exit queue
-        if (validator.amount < ACTIVATION_AMOUNT / 2) {
-            validator.status = ValidatorStatus.EXITED;
-            exitQueue.push(Queue({ pubkey: pubkey, timestamp: uint64(block.timestamp), amount: 0, owner: validator.owner }));
-            emit BeaconChain___Exit(pubkey, validator.amount);
+    /// @notice Processes multiple withdrawals from the withdraw queue.
+    function processWithdraw(
+        uint256 count
+    ) public {
+        uint256 len = min(withdrawQueue.length, count);
+        for (uint256 i; i < len; i++) {
+            processWithdraw();
         }
     }
 
-    /// @notice Processes the first pending exit in the exit queue (FIFO).
-    function processExit() public {
-        require(exitQueue.length > 0, "No pending exits");
-        processExit(0);
-    }
-
-    /// @notice Processes an exit from the exit queue.
-    /// @param index The index of the exit to process.
-    function processExit(
-        uint256 index
+    /// @notice Goes through all validators and change status from EXITED to WITHDRAWABLE.
+    /// @dev This function is used to simulate the exit delay, but does not enforce any time-based logic.
+    function desactivateValidator(
+        uint256 count
     ) public {
-        require(index < exitQueue.length, "Invalid exit index");
+        // First count validators in EXITED state
+        uint256 exitedCount;
+        uint256 len = validators.length;
+        for (uint256 i = 0; i < len; i++) {
+            if (validators[i].status == ValidatorStatus.EXITED) exitedCount++;
+        }
+        if (exitedCount == 0) return; // No exited validators to process
 
-        // Store exiting validator in memory to avoid multiple SLOADs
-        Queue memory exitingValidator = exitQueue[index];
-
-        // Remove exiting validator from exitQueue and conserve order, by shifting elements from right to left
-        _removeFromList(exitQueue, index);
-
-        bytes memory pubkey = exitingValidator.pubkey;
-
-        //  Get the validator index corresponding to the pubkey, it must exist
-        Validator storage validator = validators[getValidatorIndex(pubkey)];
-
-        // Ensure the validator is in EXITED state
-        require(validator.status == ValidatorStatus.EXITED, "Validator must be in EXITED state");
-
-        // Validator can now be marked as WITHDRAWABLE
-        validator.status = ValidatorStatus.WITHDRAWABLE;
-
-        emit BeaconChain___ValidatorWithdrawable(pubkey);
+        // Process up to `count` exited validators
+        // Having two loops is not optimal but simplifies the logic, it can be improved.
+        uint256 toProcess = min(exitedCount, count);
+        uint256 processed;
+        for (uint256 i = 0; i < len && processed < toProcess; i++) {
+            Validator storage validator = validators[i];
+            if (validator.status == ValidatorStatus.EXITED) {
+                validator.status = ValidatorStatus.WITHDRAWABLE;
+                emit BeaconChain___ValidatorWithdrawable(validator.pubkey);
+                processed++;
+            }
+        }
     }
 
-    /// @notice Get through all active validators and process:
-    /// - removed all amount above 2048 ETH, assuming only 0x02 validators
-    /// @notice Sweeps excess ETH from active and withdrawable validators, transferring to owners.
+    /// @notice Desactivate all exited validators.
+    function desactivateValidator() public {
+        desactivateValidator(validators.length);
+    }
+
+    /// @notice Get through all active validators and process if status is:
+    /// - UNKNOWN: revert as should never happen
+    /// - DEPOSITED: do nothing, waiting either for more deposits or activateValidators to be called
+    /// - ACTIVE: remove all amount above 2048 ETH, assuming only 0x02 validators
+    /// - EXITED: do nothing, waiting for desactivateValidator to be called and move to WITHDRAWABLE
+    /// - WITHDRAWABLE: transfer all amount to owner and set amount to 0
     function processSweep() public {
         for (uint256 i = 0; i < validators.length; i++) {
             Validator storage validator = validators[i];
@@ -316,6 +341,16 @@ contract BeaconChain {
                     emit BeaconChain___WithdrawProcessed(validator.pubkey, excess);
                 }
             }
+        }
+    }
+
+    /// @notice Processes sweep for fixed number of validators.
+    function processSweep(
+        uint256 count
+    ) public {
+        uint256 len = min(validators.length, count);
+        for (uint256 i; i < len; i++) {
+            processSweep();
         }
     }
 
@@ -386,13 +421,14 @@ contract BeaconChain {
         emit BeaconChain___ValidatorSlashed(pubkey, amount);
 
         // If validator amount is less than 16 ETH, move validator to exit queue
-        if (validator.amount < MIN_EXIT_AMOUNT) {
-            validator.status = ValidatorStatus.EXITED;
-            exitQueue.push(
-                Queue({ pubkey: validator.pubkey, timestamp: uint64(block.timestamp), amount: 0, owner: validator.owner })
-            );
-            emit BeaconChain___Exit(pubkey, validator.amount);
-        }
+        // Todo: handle this
+        //if (validator.amount < MIN_EXIT_AMOUNT) {
+        //    validator.status = ValidatorStatus.EXITED;
+        //    exitQueue.push(
+        //        Queue({ pubkey: validator.pubkey, timestamp: uint64(block.timestamp), amount: 0, owner: validator.owner })
+        //    );
+        //    emit BeaconChain___Exited(pubkey, validator.amount);
+        //}
     }
 
     /// @notice Returns the protocol fee (not implemented).
@@ -475,16 +511,6 @@ contract BeaconChain {
     /// @notice Returns the length of the withdraw queue.
     function getWithdrawQueueLength() external view returns (uint256) {
         return withdrawQueue.length;
-    }
-
-    /// @notice Returns the exit queue.
-    function getExitQueue() external view returns (Queue[] memory) {
-        return exitQueue;
-    }
-
-    /// @notice Returns the length of the exit queue.
-    function getExitQueueLength() external view returns (uint256) {
-        return exitQueue.length;
     }
 
     /// @notice Returns the index of a validator by public key.
