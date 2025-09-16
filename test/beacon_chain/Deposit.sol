@@ -36,7 +36,7 @@ contract Deposit_Test is Setup {
 
         // Activate validator 1
         beaconChain.getValidatorLength();
-        beaconChain.activateValidator();
+        beaconChain.activateValidators();
         beaconChain.getValidatorLength();
 
         // Check validator state
@@ -74,7 +74,7 @@ contract Deposit_Test is Setup {
 
         beaconChain.processDeposit(0);
         beaconChain.processDeposit(0);
-        beaconChain.activateValidator();
+        beaconChain.activateValidators();
 
         // Check validator state
         checkValidatorState();
