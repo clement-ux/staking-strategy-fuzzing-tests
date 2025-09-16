@@ -15,6 +15,7 @@ contract BeaconChain {
     uint256 public constant MIN_DEPOSIT = 1 ether;
     uint256 public constant MIN_EXIT_AMOUNT = 16 ether;
     uint256 public constant ACTIVATION_AMOUNT = 32 ether;
+    uint256 public constant MIN_SLASHING_PENALTY = 1 ether;
     uint256 public constant MAX_EFFECTIVE_BALANCE = 2048 ether;
 
     // Address where slashing rewards are sent to (generated using pk = uint256(keccak256(abi.encodePacked("name")))).
@@ -47,6 +48,7 @@ contract BeaconChain {
         bytes pubkey;
         address owner;
         uint256 amount; // in wei
+        uint256 slashedAmount; // in wei
         ValidatorStatus status;
     }
 
@@ -86,6 +88,7 @@ contract BeaconChain {
     // Errors (labeled as event to prevent revert)
     event INSUFFICIENT_VALIDATOR_BALANCE(bytes pubkey, uint256 available, uint256 requested);
     event ONLY_OWNER_CAN_REQUEST_WITHDRAWAL(bytes pubkey, address owner, address requester);
+    event INCORRECT_VALIDATOR_STATE(bytes pubkey, ValidatorStatus status);
 
     ////////////////////////////////////////////////////
     /// --- DEPOSIT FUNCTIONS
@@ -137,6 +140,7 @@ contract BeaconChain {
                 Validator({
                     pubkey: pendingDeposit.pubkey,
                     amount: pendingDeposit.amount,
+                    slashedAmount: 0,
                     owner: pendingDeposit.owner,
                     status: ValidatorStatus.DEPOSITED
                 })
@@ -227,6 +231,12 @@ contract BeaconChain {
         // Get the validator index corresponding to the pubkey, it must exist
         Validator storage validator = validators[getValidatorIndex(pubkey)];
 
+        // Todo: ensure the validator is either in state ACTIVE or DEPOSITED
+        if (validator.status != ValidatorStatus.DEPOSITED && validator.status != ValidatorStatus.ACTIVE) {
+            emit INCORRECT_VALIDATOR_STATE(pubkey, validator.status);
+            return; // Only ACTIVE validators can process withdrawal, ignored
+        }
+
         // Ensure only the owner can request withdrawal
         if (validator.owner != msg.sender) {
             emit ONLY_OWNER_CAN_REQUEST_WITHDRAWAL(pubkey, validator.owner, msg.sender);
@@ -314,6 +324,7 @@ contract BeaconChain {
     /// - WITHDRAWABLE: transfer all amount to owner and set amount to 0
     function processSweep() public {
         for (uint256 i = 0; i < validators.length; i++) {
+            bool success;
             Validator storage validator = validators[i];
             ValidatorStatus status = validator.status;
             if (status == ValidatorStatus.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
@@ -324,22 +335,32 @@ contract BeaconChain {
                     validator.amount = MAX_EFFECTIVE_BALANCE;
 
                     // Transfer excess ETH to the validator owner
-                    (bool success,) = validator.owner.call{ value: excess }("");
+                    (success,) = validator.owner.call{ value: excess }("");
                     require(success, "Excess transfer failed");
                     emit BeaconChain___Sweep(validator.pubkey, excess);
                 }
             }
             if (status == ValidatorStatus.EXITED) continue;
             if (status == ValidatorStatus.WITHDRAWABLE) {
-                if (validator.amount > 0) {
-                    uint256 excess = validator.amount;
-                    validator.amount = 0;
+                if (validator.amount == 0) continue; // Nothing to withdraw
 
-                    // Transfer all ETH to the validator owner
-                    (bool success,) = validator.owner.call{ value: excess }("");
-                    require(success, "Withdrawable transfer failed");
-                    emit BeaconChain___WithdrawProcessed(validator.pubkey, excess);
+                // First handle slashed amount if any
+                if (validator.slashedAmount > 0) {
+                    // Send slashed amount to the slashing reward recipient
+                    (success,) = SLASHING_REWARD_RECIPIENT.call{ value: validator.slashedAmount }("");
+                    require(success, "Slashing transfer failed");
+
+                    validator.amount -= validator.slashedAmount;
                 }
+
+                uint256 remaining = validator.amount;
+                if (remaining == 0) continue; // Nothing to withdraw after slashing
+
+                validator.amount = 0;
+                // Transfer all ETH to the validator owner
+                (success,) = validator.owner.call{ value: remaining }("");
+                require(success, "Withdrawable transfer failed");
+                emit BeaconChain___WithdrawProcessed(validator.pubkey, remaining);
             }
         }
     }
@@ -401,34 +422,26 @@ contract BeaconChain {
         emit BeaconChain___RewardsDistributed(pubkey, amount);
     }
 
-    /// @notice Slashes a validator by reducing its balance and sending ETH to the slashing reward recipient.
+    /// @notice Slashes a validator by reducing its balance.
+    /// @dev The actual deduction from the validator's balance happens during the sweep process.
     /// @param pubkey The public key of the validator.
     /// @param amount The amount to slash.
     function slash(bytes memory pubkey, uint256 amount) public {
         uint256 index = getValidatorIndex(pubkey);
         require(index < validators.length, "Invalid validator index");
+
         Validator storage validator = validators[index];
+        require(amount >= MIN_SLASHING_PENALTY, "Slashing amount must be greater than minimum penalty");
         require(validator.amount >= amount, "Insufficient validator balance to slash");
         require(validator.status == ValidatorStatus.ACTIVE, "Validator must be ACTIVE to be slashed");
 
-        // Slash the validator
-        validator.amount -= amount;
+        // Increase slashed amount, decrease validator amount will be done in sweep
+        validator.slashedAmount += amount;
 
-        // Send ETH to the slashing reward address
-        (bool success,) = SLASHING_REWARD_RECIPIENT.call{ value: amount }("");
-        require(success, "Slashing transfer failed");
+        // Slashed validators are forced to exit
+        validator.status = ValidatorStatus.EXITED;
 
         emit BeaconChain___ValidatorSlashed(pubkey, amount);
-
-        // If validator amount is less than 16 ETH, move validator to exit queue
-        // Todo: handle this
-        //if (validator.amount < MIN_EXIT_AMOUNT) {
-        //    validator.status = ValidatorStatus.EXITED;
-        //    exitQueue.push(
-        //        Queue({ pubkey: validator.pubkey, timestamp: uint64(block.timestamp), amount: 0, owner: validator.owner })
-        //    );
-        //    emit BeaconChain___Exited(pubkey, validator.amount);
-        //}
     }
 
     /// @notice Returns the protocol fee (not implemented).
