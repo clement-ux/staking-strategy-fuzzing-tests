@@ -94,14 +94,19 @@ contract BeaconChain {
     /// @dev Requires validator to be registered in SSVNetwork and deposit >= 1 ETH.
     function deposit(
         bytes calldata pubkey,
-        bytes calldata, /*withdrawal_credentials*/
+        bytes calldata withdrawal_credentials,
         bytes calldata, /*signature*/
         bytes32 /*deposit_data_root*/
     ) public payable {
         require(msg.value >= MIN_DEPOSIT, "Minimum deposit is 1 ETH");
         require(ssvRegistreredValidators[pubkey], "Validator not registered in SSVNetwork");
         depositQueue.push(
-            Queue({ amount: msg.value, pubkey: pubkey, timestamp: uint64(block.timestamp), owner: msg.sender })
+            Queue({
+                amount: msg.value,
+                pubkey: pubkey,
+                timestamp: uint64(block.timestamp),
+                owner: decodeOwner(withdrawal_credentials)
+            })
         );
         emit BeaconChain___Deposit(pubkey, msg.value);
     }
@@ -453,6 +458,17 @@ contract BeaconChain {
             list[i] = list[i + 1];
         }
         list.pop();
+    }
+
+    /// @notice Decodes the owner address from withdrawal credentials.
+    /// @param withdrawalCredentials The withdrawal credentials.
+    /// @return The owner address.
+    function decodeOwner(
+        bytes memory withdrawalCredentials
+    ) public pure returns (address) {
+        require(withdrawalCredentials.length == 32, "Invalid withdrawal credentials length");
+        require(!withdrawalCredentials.eq(bytes("")), "Invalid withdrawal credentials prefix");
+        return address(uint160(uint256(bytes32(withdrawalCredentials))));
     }
 
     ////////////////////////////////////////////////////
