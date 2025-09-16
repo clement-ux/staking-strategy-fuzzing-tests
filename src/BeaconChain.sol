@@ -227,7 +227,7 @@ contract BeaconChain {
         Validator storage validator = validators[getValidatorIndex(pubkey)];
 
         // Ensure the validator has enough balance and deduct the amount
-        if (validator.amount < pendingWithdrawal.amount + ACTIVATION_AMOUNT) {
+        if (validator.amount < pendingWithdrawal.amount) {
             emit INSUFFICIENT_VALIDATOR_BALANCE(pubkey, validator.amount, pendingWithdrawal.amount);
             return; // Incorrect withdraw request, ignored
         }
