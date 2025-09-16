@@ -172,7 +172,7 @@ contract BeaconChain {
     }
 
     /// @notice Goes through all validators and activates those that are `DEPOSITED` and have enough ETH.
-    function activateValidator() public {
+    function activateValidators() public {
         uint256 len = validators.length;
         for (uint256 i; i < len; i++) {
             Validator storage validator = validators[i];
@@ -486,7 +486,7 @@ contract BeaconChain {
 
 // --- List of actions ---
 // processDeposit
-// activateValidator
+// activateValidators
 // processExit
 // processWithdraw
 // processSweep
