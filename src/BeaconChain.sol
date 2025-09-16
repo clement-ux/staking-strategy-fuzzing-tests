@@ -71,7 +71,7 @@ contract BeaconChain {
 
     // Validators events
     event BeaconChain___ValidatorCreated(bytes pubkey);
-    event BeaconChain___ValidatorActivated(bytes pubkey);
+    event BeaconChain___ValidatorActivated(bytes pubkey, uint256 amount);
     event BeaconChain___ValidatorExited(bytes pubkey);
     event BeaconChain___ValidatorWithdrawable(bytes pubkey);
     event BeaconChain___ValidatorSlashed(bytes pubkey, uint256 amount);
@@ -178,7 +178,7 @@ contract BeaconChain {
             Validator storage validator = validators[i];
             if (validator.status == ValidatorStatus.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
                 validator.status = ValidatorStatus.ACTIVE;
-                emit BeaconChain___ValidatorActivated(validator.pubkey);
+                emit BeaconChain___ValidatorActivated(validator.pubkey, validator.amount);
             }
         }
     }
