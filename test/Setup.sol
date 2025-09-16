@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { console } from "@forge-std/console.sol";
-
 // Base
 import { Base } from "./Base.sol";
 
@@ -22,7 +20,10 @@ import { BeaconProofs } from "../src/BeaconProofs.sol";
 import { DepositContract } from "../src/DepositContract.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 
-contract Setup is Base {
+// Utils
+import { ValidatorSet } from "../src/ValidatorSet.sol";
+
+contract Setup is Base, ValidatorSet {
     ////////////////////////////////////////////////////
     /// --- SETUP
     ////////////////////////////////////////////////////

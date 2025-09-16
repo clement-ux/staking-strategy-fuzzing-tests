@@ -20,10 +20,7 @@ import { DepositContract } from "../src/DepositContract.sol";
 import { RewardDistributor } from "../src/RewardDistributor.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 
-// Utils
-import { ValidatorSet } from "./ValidatorSet.sol";
-
-contract Base is Test, ValidatorSet {
+contract Base is Test {
     ////////////////////////////////////////////////////
     /// --- CONSTANTS & IMMUTABLES
     ////////////////////////////////////////////////////
