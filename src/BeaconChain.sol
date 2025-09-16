@@ -55,7 +55,6 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     Queue[] public exitQueue;
     Queue[] public depositQueue;
-    Queue[] public pendingQueue;
     Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
     mapping(bytes pubkey => bool registered) public ssvRegistreredValidators; // mapping of SSV registered validators
@@ -65,7 +64,7 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     // Deposit events
     event BeaconChain___Deposit(bytes pubkey, uint256 amount);
-    event BeaconChain___DepositProcessed(bytes pubkey, uint256 amount);
+    event BeaconChain___DepositProcessed(bytes pubkey, uint256 amoun, ValidatorStatus status);
     event BeaconChain___Withdraw(bytes pubkey, uint256 amount);
     event BeaconChain___WithdrawProcessed(bytes pubkey, uint256 amount);
     event BeaconChain___Exit(bytes pubkey, uint256 remainingAmount);
@@ -94,7 +93,7 @@ contract BeaconChain {
     /// @dev Requires validator to be registered in SSVNetwork and deposit >= 1 ETH.
     function deposit(
         bytes calldata pubkey,
-        bytes calldata withdrawal_credentials,
+        bytes calldata withdrawalCredentials,
         bytes calldata, /*signature*/
         bytes32 /*deposit_data_root*/
     ) public payable {
@@ -105,7 +104,7 @@ contract BeaconChain {
                 amount: msg.value,
                 pubkey: pubkey,
                 timestamp: uint64(block.timestamp),
-                owner: decodeOwner(withdrawal_credentials)
+                owner: decodeOwner(withdrawalCredentials)
             })
         );
         emit BeaconChain___Deposit(pubkey, msg.value);
@@ -139,29 +138,18 @@ contract BeaconChain {
         // It is same to reuse `index` variable as not used anymore
         index = getValidatorIndex(pubkey);
 
-        // --- 1. Validator doesn't exist for this pubkey, create it
+        // --- 1. Validator doesn't exist for this pubkey, create it and add amount
         if (index == NOT_FOUND) {
             validators.push(
                 Validator({
                     pubkey: pendingDeposit.pubkey,
-                    amount: 0,
+                    amount: pendingDeposit.amount,
                     owner: pendingDeposit.owner,
                     status: ValidatorStatus.DEPOSITED
                 })
             );
             emit BeaconChain___ValidatorCreated(pubkey);
-
-            // Add to pendingQueue
-            pendingQueue.push(
-                Queue({
-                    amount: pendingDeposit.amount,
-                    pubkey: pendingDeposit.pubkey,
-                    timestamp: pendingDeposit.timestamp,
-                    owner: pendingDeposit.owner
-                })
-            );
-            emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount);
-
+            emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount, ValidatorStatus.DEPOSITED);
             return;
         }
 
@@ -169,73 +157,30 @@ contract BeaconChain {
         Validator storage validator = validators[index];
         ValidatorStatus currentStatus = validator.status;
 
-        // --- 2.a. Validator is in DEPOSITED state, increase pending validator amount
-        if (currentStatus == ValidatorStatus.DEPOSITED) {
-            // Find the pending validator and increase its amount
-            for (uint256 i = 0; i < pendingQueue.length; i++) {
-                if (keccak256(pendingQueue[i].pubkey) == keccak256(pubkey)) {
-                    pendingQueue[i].amount += pendingDeposit.amount;
-                    break;
-                }
-            }
-            emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount);
-        }
-        // --- 2.b. Validator exists and is ACTIVE or WITHDRAWABLE, increase stake
-        else if (currentStatus == ValidatorStatus.ACTIVE || currentStatus == ValidatorStatus.WITHDRAWABLE) {
-            validator.amount += pendingDeposit.amount;
-            emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount);
-        }
-        // --- 2.c. Exited validators cannot be reactivated, so deposits are postponed
-        else if (currentStatus == ValidatorStatus.EXITED) {
+        // --- 2.a. UNKNOWN status should never happen
+        if (currentStatus == ValidatorStatus.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
+
+        // --- 2.b. Exited validators cannot be reactivated, so deposits are postponed
+        if (currentStatus == ValidatorStatus.EXITED) {
             depositQueue.push(pendingDeposit);
             emit BeaconChain___Deposit(pubkey, pendingDeposit.amount);
         }
+
+        // --- 2.c. Validator exists and is either DEPOSITED, ACTIVE or WITHDRAWABLE: increase stake
+        validator.amount += pendingDeposit.amount;
+        emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount, currentStatus);
     }
 
-    /// @notice Processes the first pending validator in the pending queue (FIFO).
+    /// @notice Goes through all validators and activates those that are `DEPOSITED` and have enough ETH.
     function activateValidator() public {
-        require(pendingQueue.length > 0, "No pending validators");
-        activateValidator(0);
-    }
-
-    /// @param index The index of the pending validator to activate, should be always 0 to process in FIFO order, but can be
-    /// any index to allow flexibility
-    /// @notice Activates a pending validator if it has enough ETH.
-    /// @param index The index of the pending validator to activate (FIFO recommended).
-    function activateValidator(
-        uint256 index
-    ) public {
-        require(index < pendingQueue.length, "Invalid pending validator index");
-
-        // Store pending validator in memory to avoid multiple SLOADs
-        Queue memory pendingValidator = pendingQueue[index];
-        bytes memory pubkey = pendingValidator.pubkey;
-
-        // Move the pending validator to the end of the array, conserving order
-        // We decide after if we will pop or update the last element, based on the amount of ETH in the validator
-        for (uint256 i = index; i < pendingQueue.length - 1; i++) {
-            pendingQueue[i] = pendingQueue[i + 1];
+        uint256 len = validators.length;
+        for (uint256 i; i < len; i++) {
+            Validator storage validator = validators[i];
+            if (validator.status == ValidatorStatus.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
+                validator.status = ValidatorStatus.ACTIVE;
+                emit BeaconChain___ValidatorActivated(validator.pubkey);
+            }
         }
-
-        // Get the validator index corresponding to the pubkey, it must exist
-        Validator storage validator = validators[getValidatorIndex(pubkey)];
-
-        // If the pending validator has less than 32 ETH, update the last element and return
-        if (validator.amount + pendingValidator.amount < ACTIVATION_AMOUNT) {
-            pendingQueue[pendingQueue.length - 1] = pendingValidator;
-            return;
-        } else {
-            pendingQueue.pop(); // Remove the last element (now a duplicate)
-        }
-
-        // Ensure the validator is in DEPOSITED state
-        require(validator.status == ValidatorStatus.DEPOSITED, "Validator must be in DEPOSITED state");
-
-        // Update the validator's status and amount
-        validator.status = ValidatorStatus.ACTIVE;
-        validator.amount += pendingValidator.amount;
-
-        emit BeaconChain___ValidatorActivated(pubkey);
     }
 
     ////////////////////////////////////////////////////
@@ -468,6 +413,8 @@ contract BeaconChain {
     ) public pure returns (address) {
         require(withdrawalCredentials.length == 32, "Invalid withdrawal credentials length");
         require(!withdrawalCredentials.eq(bytes("")), "Invalid withdrawal credentials prefix");
+
+        // forge-lint: disable-next-line(unsafe-typecast)
         return address(uint160(uint256(bytes32(withdrawalCredentials))));
     }
 
@@ -502,16 +449,6 @@ contract BeaconChain {
     /// @notice Returns the length of the deposit queue.
     function getDepositQueueLength() external view returns (uint256) {
         return depositQueue.length;
-    }
-
-    /// @notice Returns the pending queue.
-    function getPendingQueue() external view returns (Queue[] memory) {
-        return pendingQueue;
-    }
-
-    /// @notice Returns the length of the pending queue.
-    function getPendingQueueLength() external view returns (uint256) {
-        return pendingQueue.length;
     }
 
     /// @notice Returns the withdraw queue.
