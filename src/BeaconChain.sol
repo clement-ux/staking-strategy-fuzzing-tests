@@ -162,7 +162,7 @@ contract BeaconChain {
     /// @notice Processes multiple deposits from the deposit queue.
     /// @param count The number of deposits to process.
     /// @dev Processes up to `count` deposits, or all if `count` exceeds the queue length.
-    function processDeposits(
+    function processDeposit(
         uint256 count
     ) public {
         uint256 len = min(depositQueue.length, count);
@@ -171,9 +171,16 @@ contract BeaconChain {
         }
     }
 
-    /// @notice Goes through all validators and activates those that are `DEPOSITED` and have enough ETH.
+    /// @notice Activates all eligible validators.
     function activateValidators() public {
-        uint256 len = validators.length;
+        activateValidators(validators.length);
+    }
+
+    /// @notice Goes through all validators and activates those that are `DEPOSITED` and have enough ETH.
+    function activateValidators(
+        uint256 count
+    ) public {
+        uint256 len = min(validators.length, count);
         for (uint256 i; i < len; i++) {
             Validator storage validator = validators[i];
             if (validator.status == ValidatorStatus.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
