@@ -200,6 +200,7 @@ contract BeaconChain {
     /// @dev Only the owner can request withdrawal.
     function withdraw(bytes calldata pubkey, uint256 amount) external {
         Validator memory validator = validators[getValidatorIndex(pubkey)];
+        if (validator.status != ValidatorStatus.ACTIVE) return; // Only ACTIVE validators can request withdrawal
         require(validator.owner == msg.sender, "Only owner can request withdrawal");
         require(validator.amount >= amount, "Insufficient validator balance");
 
