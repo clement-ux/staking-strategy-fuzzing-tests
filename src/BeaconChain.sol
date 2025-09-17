@@ -473,12 +473,7 @@ contract BeaconChain {
             validator.status = Status.EXITED;
             emit BeaconChain___StatusChanged(pubkey, validator.amount, Status.DEPOSITED, Status.EXITED);
         }
-        if (validator.status == Status.ACTIVE) {
-            validator.slashedAmount += MIN_SLASHING_PENALTY; // Apply minimum slashing penalty
-            validator.status = Status.EXITED;
-            emit BeaconChain___ValidatorSlashed(pubkey, MIN_SLASHING_PENALTY);
-            emit BeaconChain___StatusChanged(pubkey, validator.amount, validator.status, Status.EXITED);
-        }
+        if (validator.status == Status.ACTIVE) slash(pubkey, MIN_SLASHING_PENALTY); // Slash and exit
 
         ssvRegisteredValidators[pubkey] = false;
         emit SSVNetwork___ValidatorRemoved(pubkey);
