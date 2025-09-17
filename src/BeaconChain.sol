@@ -458,13 +458,10 @@ contract BeaconChain {
     ) public {
         require(ssvRegisteredValidators[pubkey], "Validator not registered");
 
-        // Force exit if validator is still active or deposited
-        Validator storage validator = validators[getValidatorIndex(pubkey)];
-        if (validator.status == Status.DEPOSITED) {
-            validator.status = Status.EXITED;
-            emit BeaconChain___StatusChanged(pubkey, validator.amount, Status.DEPOSITED, Status.EXITED);
-        }
-        if (validator.status == Status.ACTIVE) slash(pubkey, MIN_SLASHING_PENALTY); // Slash and exit
+        if (validators[getValidatorIndex(pubkey)].status == Status.DEPOSITED) return; // Cannot remove if still DEPOSITED
+
+        // Force exit if validator is still active
+        if (validators[getValidatorIndex(pubkey)].status == Status.ACTIVE) slash(pubkey, MIN_SLASHING_PENALTY);
 
         ssvRegisteredValidators[pubkey] = false;
         emit SSVNetwork___ValidatorRemoved(pubkey);
