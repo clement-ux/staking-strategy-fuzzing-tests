@@ -281,7 +281,7 @@ contract BeaconChain {
 
     /// @notice Goes through all validators and change status from EXITED to WITHDRAWABLE.
     /// @dev This function is used to simulate the exit delay, but does not enforce any time-based logic.
-    function desactivateValidator(
+    function deactivateValidator(
         uint256 count
     ) public {
         // First count validators in EXITED state
@@ -307,15 +307,15 @@ contract BeaconChain {
     }
 
     /// @notice Desactivate all exited validators.
-    function desactivateValidator() public {
-        desactivateValidator(validators.length);
+    function deactivateValidator() public {
+        deactivateValidator(validators.length);
     }
 
     /// @notice Get through all active validators and process if status is:
     /// - UNKNOWN: revert as should never happen
     /// - DEPOSITED: do nothing, waiting either for more deposits or activateValidators to be called
     /// - ACTIVE: remove all amount above 2048 ETH, assuming only 0x02 validators
-    /// - EXITED: do nothing, waiting for desactivateValidator to be called and move to WITHDRAWABLE
+    /// - EXITED: do nothing, waiting for deactivateValidator to be called and move to WITHDRAWABLE
     /// - WITHDRAWABLE: transfer all amount to owner and set amount to 0
     function processSweep() public {
         for (uint256 i = 0; i < validators.length; i++) {
