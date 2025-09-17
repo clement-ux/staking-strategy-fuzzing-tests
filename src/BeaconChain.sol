@@ -57,7 +57,7 @@ contract BeaconChain {
     Queue[] public depositQueue;
     Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
-    mapping(bytes pubkey => bool registered) public ssvRegistreredValidators; // mapping of SSV registered validators
+    mapping(bytes pubkey => bool registered) public ssvRegisteredValidators; // mapping of SSV registered validators
 
     ////////////////////////////////////////////////////
     /// --- ERRORS & EVENTS
@@ -100,7 +100,7 @@ contract BeaconChain {
         bytes32 /*deposit_data_root*/
     ) public payable {
         require(msg.value >= MIN_DEPOSIT, "Minimum deposit is 1 ETH");
-        require(ssvRegistreredValidators[pubkey], "Validator not registered in SSVNetwork");
+        require(ssvRegisteredValidators[pubkey], "Validator not registered in SSVNetwork");
         depositQueue.push(
             Queue({
                 amount: msg.value,
@@ -424,8 +424,8 @@ contract BeaconChain {
     ) public {
         Validator memory validator = validators[getValidatorIndex(pubkey)];
         require(validator.status == Status.UNKNOWN, "Validator already exists");
-        require(!ssvRegistreredValidators[pubkey], "Validator already registered");
-        ssvRegistreredValidators[pubkey] = true;
+        require(!ssvRegisteredValidators[pubkey], "Validator already registered");
+        ssvRegisteredValidators[pubkey] = true;
 
         emit SSVNetwork___ValidatorRegistered(pubkey);
     }
@@ -436,7 +436,7 @@ contract BeaconChain {
     function removeSsvValidator(
         bytes memory pubkey
     ) public {
-        require(ssvRegistreredValidators[pubkey], "Validator not registered");
+        require(ssvRegisteredValidators[pubkey], "Validator not registered");
 
         // Force exit if validator is still active or deposited
         Validator storage validator = validators[getValidatorIndex(pubkey)];
@@ -447,7 +447,7 @@ contract BeaconChain {
             emit BeaconChain___StatusChanged(pubkey, validator.amount, validator.status, Status.EXITED);
         }
 
-        ssvRegistreredValidators[pubkey] = false;
+        ssvRegisteredValidators[pubkey] = false;
         emit SSVNetwork___ValidatorRemoved(pubkey);
     }
 
