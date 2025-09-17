@@ -422,6 +422,8 @@ contract BeaconChain {
     function registerSsvValidator(
         bytes memory pubkey
     ) public {
+        Validator memory validator = validators[getValidatorIndex(pubkey)];
+        require(validator.status == Status.UNKNOWN, "Validator already exists");
         require(!ssvRegistreredValidators[pubkey], "Validator already registered");
         ssvRegistreredValidators[pubkey] = true;
 
@@ -434,12 +436,18 @@ contract BeaconChain {
     function removeSsvValidator(
         bytes memory pubkey
     ) public {
-        Validator memory validator = validators[getValidatorIndex(pubkey)];
         require(ssvRegistreredValidators[pubkey], "Validator not registered");
-        require(validator.status != Status.WITHDRAWABLE, "Cannot remove WITHDRAWABLE validator");
-        require(validator.amount == 0, "Cannot remove validator with balance");
-        ssvRegistreredValidators[pubkey] = false;
 
+        // Force exit if validator is still active or deposited
+        Validator storage validator = validators[getValidatorIndex(pubkey)];
+        if (validator.status == Status.DEPOSITED || validator.status == Status.ACTIVE) {
+            validator.slashedAmount += MIN_SLASHING_PENALTY; // Apply minimum slashing penalty
+            validator.status = Status.EXITED;
+            emit BeaconChain___ValidatorSlashed(pubkey, MIN_SLASHING_PENALTY);
+            emit BeaconChain___StatusChanged(pubkey, validator.amount, validator.status, Status.EXITED);
+        }
+
+        ssvRegistreredValidators[pubkey] = false;
         emit SSVNetwork___ValidatorRemoved(pubkey);
     }
 
