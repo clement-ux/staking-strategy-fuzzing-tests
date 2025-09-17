@@ -51,7 +51,6 @@ contract BeaconChain {
         bytes pubkey;
         address owner;
         uint256 amount; // in wei
-        uint256 slashedAmount; // in wei
         Status status;
     }
 
@@ -141,7 +140,6 @@ contract BeaconChain {
                 Validator({
                     pubkey: pendingDeposit.pubkey,
                     amount: pendingDeposit.amount,
-                    slashedAmount: 0,
                     owner: pendingDeposit.owner,
                     status: Status.DEPOSITED
                 })
@@ -350,18 +348,7 @@ contract BeaconChain {
             if (status == Status.WITHDRAWABLE) {
                 if (validator.amount == 0) continue; // Nothing to withdraw
 
-                // First handle slashed amount if any
-                if (validator.slashedAmount > 0) {
-                    // Send slashed amount to the slashing reward recipient
-                    (success,) = SLASHING_REWARD_RECIPIENT.call{ value: validator.slashedAmount }("");
-                    require(success, "Slashing transfer failed");
-
-                    validator.amount -= validator.slashedAmount;
-                }
-
                 uint256 remaining = validator.amount;
-                if (remaining == 0) continue; // Nothing to withdraw after slashing
-
                 validator.amount = 0;
                 // Transfer all ETH to the validator owner
                 (success,) = validator.owner.call{ value: remaining }("");
@@ -432,7 +419,11 @@ contract BeaconChain {
         require(validator.status == Status.ACTIVE, "Validator must be ACTIVE to be slashed");
 
         // Increase slashed amount, decrease validator amount will be done in sweep
-        validator.slashedAmount += amount;
+        validator.amount -= amount;
+
+        // Send slashed amount to the slashing reward recipient
+        (bool success,) = SLASHING_REWARD_RECIPIENT.call{ value: amount }("");
+        require(success, "Slashing transfer failed");
 
         // Slashed validators are forced to exit
         validator.status = Status.EXITED;
