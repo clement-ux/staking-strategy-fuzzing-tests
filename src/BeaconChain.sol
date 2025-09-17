@@ -41,6 +41,7 @@ contract BeaconChain {
         uint64 timestamp;
         uint256 amount; // in wei
         address owner;
+        uint256 uid;
     }
 
     struct Validator {
@@ -58,6 +59,7 @@ contract BeaconChain {
     Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
     mapping(bytes pubkey => bool registered) public ssvRegisteredValidators; // mapping of SSV registered validators
+    mapping(bytes pubkey => uint256 uid) public depositUID; // unique identifier for each deposit, to prevent duplicates
 
     ////////////////////////////////////////////////////
     /// --- ERRORS & EVENTS
@@ -106,9 +108,11 @@ contract BeaconChain {
                 amount: msg.value,
                 pubkey: pubkey,
                 timestamp: uint64(block.timestamp),
-                owner: decodeOwner(withdrawalCredentials)
+                owner: decodeOwner(withdrawalCredentials),
+                uid: depositUID[pubkey]
             })
         );
+        depositUID[pubkey]++; // increment uid to ensure uniqueness for next deposit
         emit BeaconChain___Deposit(pubkey, msg.value);
     }
 
@@ -186,7 +190,9 @@ contract BeaconChain {
         Validator memory validator = validators[getValidatorIndex(pubkey)];
         if (validator.status != Status.ACTIVE) return; // Only ACTIVE validators can request withdrawal
 
-        withdrawQueue.push(Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0) }));
+        withdrawQueue.push(
+            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0), uid: 0 })
+        );
 
         emit BeaconChain___Withdraw(pubkey, amount);
     }

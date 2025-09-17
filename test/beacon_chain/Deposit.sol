@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { console } from "@forge-std/console.sol";
 import { Setup } from "../Setup.sol";
+import { BeaconChain } from "../../src/BeaconChain.sol";
 import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+import { CompoundingStakingStrategyView } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingView.sol";
 
 contract Deposit_Test is Setup {
     bytes nullBytes32 = aliceWithdrawalCredentials;
@@ -17,10 +20,6 @@ contract Deposit_Test is Setup {
         vm.prank(operator);
         strategy.registerSsvValidator(validator1.pubkey, new uint64[](0), bytes(""), 0, emptyCluster);
 
-        // Alice front run the deposit
-        bytes memory withdrawalCredentials = abi.encodePacked(bytes1(0x02), bytes11(0), address(alice));
-        vm.prank(alice);
-        depositContract.deposit{ value: 1 ether }(validator1.pubkey, withdrawalCredentials, bytes(""), bytes32(0));
         // Stake 1 ETH
         weth.mint(address(strategy), 1 ether);
         vm.prank(operator);
@@ -29,6 +28,21 @@ contract Deposit_Test is Setup {
         );
 
         // Verify validator
-        strategy.verifyValidator(0, validator1.index, hashPubKey(validator1.pubkey), address(alice), bytes(""));
+        strategy.verifyValidator(0, validator1.index, hashPubKey(validator1.pubkey), address(strategy), bytes(""));
+
+        // Process deposit on BeaconChain
+        beaconChain.processDeposit();
+
+        // Verify deposit
+        CompoundingStakingStrategyView.DepositView[] memory deposits = strategyView.getPendingDeposits();
+        strategy.verifyDeposit({
+            pendingDepositRoot: deposits[0].pendingDepositRoot,
+            depositProcessedSlot: deposits[0].slot + 1,
+            firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
+            strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
+                withdrawableEpoch: type(uint64).max,
+                withdrawableEpochProof: abi.encodePacked(uint256(1)) // Todo find something better for the UID.
+             })
+        });
     }
 }

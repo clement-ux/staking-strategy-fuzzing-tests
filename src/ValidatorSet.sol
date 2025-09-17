@@ -3,9 +3,11 @@ pragma solidity 0.8.29;
 
 // Utils
 import { LibBytes } from "@solady/utils/LibBytes.sol";
+import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
 
 contract ValidatorSet {
     using LibBytes for bytes;
+    using SafeCastLib for uint256;
 
     ////////////////////////////////////////////////////
     /// --- STRUCTS & ENUMS
@@ -63,6 +65,7 @@ contract ValidatorSet {
     Validator[] public validators;
 
     mapping(bytes pubkey => uint40 index) public pubkeyToIndex;
+    mapping(uint40 index => bytes pubkey) public indexToPubkey;
     mapping(bytes pubkey => bytes32) public pubkeyToHash;
     mapping(bytes32 pubkeyHash => bytes pubkey) public hashToPubkey;
 
@@ -94,6 +97,7 @@ contract ValidatorSet {
 
         for (uint256 i = 0; i < validators.length; i++) {
             pubkeyToIndex[validators[i].pubkey] = validators[i].index;
+            indexToPubkey[validators[i].index] = validators[i].pubkey;
 
             bytes32 pubKeyHash = hashPubKey(validators[i].pubkey);
             pubkeyToHash[validators[i].pubkey] = pubKeyHash;
@@ -110,5 +114,11 @@ contract ValidatorSet {
     ) public pure returns (bytes32) {
         require(pubKey.length == 48, "Invalid public key length");
         return sha256(abi.encodePacked(pubKey, bytes16(0)));
+    }
+
+    function withdrawCredentials(
+        address addr
+    ) public pure returns (bytes memory) {
+        return abi.encodePacked(bytes1(0x02), bytes11(0), addr);
     }
 }

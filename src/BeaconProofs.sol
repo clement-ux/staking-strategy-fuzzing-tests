@@ -32,10 +32,10 @@ contract BeaconProofs is ValidatorSet {
         bytes32 pubKeyHash,
         bytes calldata withdrawalCredentials,
         uint64 amountGwei,
-        bytes calldata signature,
-        uint64 slot
+        bytes calldata, /*signature*/
+        uint64 /*slot*/
     ) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(pubKeyHash, withdrawalCredentials, amountGwei, signature, slot));
+        return keccak256(abi.encodePacked(pubKeyHash, withdrawalCredentials, amountGwei /*, signature, slot*/ ));
     }
 
     /// @notice Verify that a validator with the given index and withdrawal address corresponds to the given pubKeyHash
@@ -81,18 +81,43 @@ contract BeaconProofs is ValidatorSet {
         revert("Beacon Proofs: Validator not found");
     }
 
+    /// @notice Check if the Deposit Queue is empty
+    /// @dev for the sake of simplicity, we assume the deposit queue is always empty. As this is only used in the
+    /// `verifyDeposit` function, we return true to bypass the last check, as we are only checking that the deposit as been
+    /// processed and this check is performed with `verifyValidatorWithdrawable`.
     function verifyFirstPendingDeposit(
         bytes32, /*beaconBlockRoot*/
-        bytes32, /*pendingDepositRoot*/
-        bytes memory /*pendingDepositProof*/
-    ) public pure returns (bool) { }
+        uint64, /*slot*/
+        bytes calldata /*firstPendingDepositSlotProof*/
+    ) public pure returns (bool) {
+        return true;
+    }
 
+    /// @notice In theory check if the validator is withdrawable
+    /// For the sake of the fuzz test; this will check that the deposit has been processed
+    /// @param withdrawableEpochProof is used to pass the unique deposit identifier
     function verifyValidatorWithdrawable(
         bytes32, /*beaconBlockRoot*/
-        uint40, /*validatorIndex*/
+        uint40 validatorIndex,
         uint64, /*withdrawableEpoch*/
-        bytes memory /*withdrawableEpochProof*/
-    ) public pure { }
+        bytes memory withdrawableEpochProof
+    ) public view {
+        // Find the uinque deposit corresponding to the validator
+        // 1. Find the pubkey from the index
+        bytes memory pubkey = indexToPubkey[validatorIndex];
+
+        // 2. Convert withdrawableEpochProof to uint256 deposit uid uint256
+        uint256 uid = uint256(bytes32(withdrawableEpochProof));
+
+        // 3. Browse the deposit queue to find a deposit with the same pubkey and uid, revert if it find the deposit
+        BeaconChain.Queue[] memory depositQueue = beaconChain.getDepositQueue();
+        uint256 len = depositQueue.length;
+        for (uint256 i = 0; i < len; i++) {
+            if (depositQueue[i].pubkey.eq(pubkey)) {
+                require(depositQueue[i].uid == uid, "Beacon Proofs: Deposit not yet processed");
+            }
+        }
+    }
 
     function verifyBalancesContainer(
         bytes32, /*beaconBlockRoot*/

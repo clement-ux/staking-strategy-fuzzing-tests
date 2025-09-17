@@ -7,6 +7,7 @@ import { Base } from "./Base.sol";
 // Contract to test
 import { InitializableAbstractStrategy } from "@origin-dollar/utils/InitializableAbstractStrategy.sol";
 import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+import { CompoundingStakingStrategyView } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingView.sol";
 import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxies.sol";
 
 // Mocks
@@ -131,6 +132,10 @@ contract Setup is Base, ValidatorSet {
         // Set logic contract on proxy
         strategy = CompoundingStakingSSVStrategy(payable(address(strategyProxy)));
 
+        // ---
+        // --- 4. Deploy view contract. ---
+        strategyView = new CompoundingStakingStrategyView(address(strategy));
+
         vm.stopPrank();
     }
 
@@ -151,6 +156,7 @@ contract Setup is Base, ValidatorSet {
         // Strategy
         vm.label(address(strategy), "CompoundingStakingSSVStrategy");
         vm.label(address(strategyProxy), "CompoundingStakingSSVStrategy Proxy");
+        vm.label(address(strategyView), "CompoundingStakingSSVStrategy View");
 
         // Mocks
         vm.label(address(beaconRoot), "BeaconRoot");

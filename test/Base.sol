@@ -7,6 +7,7 @@ import { Test } from "@forge-std/Test.sol";
 // Contract to test
 import { Cluster } from "@origin-dollar/interfaces/ISSVNetwork.sol";
 import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+import { CompoundingStakingStrategyView } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingView.sol";
 import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxies.sol";
 
 // Mocks
@@ -49,6 +50,7 @@ contract Base is Test {
     ////////////////////////////////////////////////////
     // Contracts
     CompoundingStakingSSVStrategy public strategy;
+    CompoundingStakingStrategyView public strategyView;
     CompoundingStakingSSVStrategyProxy public strategyProxy;
 
     // Mocks
