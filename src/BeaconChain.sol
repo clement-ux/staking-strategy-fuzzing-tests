@@ -422,9 +422,8 @@ contract BeaconChain {
     function registerSsvValidator(
         bytes memory pubkey
     ) public {
-        Validator memory validator = validators[getValidatorIndex(pubkey)];
-        require(validator.status == Status.UNKNOWN, "Validator already exists");
         require(!ssvRegisteredValidators[pubkey], "Validator already registered");
+        require(getValidatorIndex(pubkey) == NOT_FOUND, "Validator already exists in BeaconChain");
         ssvRegisteredValidators[pubkey] = true;
 
         emit SSVNetwork___ValidatorRegistered(pubkey);
