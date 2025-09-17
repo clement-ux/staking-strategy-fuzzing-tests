@@ -73,6 +73,7 @@ contract Setup is Base, ValidatorSet {
 
         // Then deploy BeaconProofs contract
         beaconProofs = new BeaconProofs(address(beaconChain));
+        beaconChain.setBeaconProofs(address(beaconProofs));
 
         // Deploy DepositContract and PartialWithdrawContract to their respective addresses on mainnet
         deployCodeTo("BeaconRoot.sol", abi.encode(), BEACON_ROOTS_ADDRESS);

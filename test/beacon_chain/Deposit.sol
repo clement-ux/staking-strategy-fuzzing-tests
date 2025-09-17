@@ -22,10 +22,18 @@ contract Deposit_Test is Setup {
 
         // Stake 1 ETH
         weth.mint(address(strategy), 1 ether);
-        vm.prank(operator);
-        strategy.stakeEth(
-            CompoundingValidatorManager.ValidatorStakeData(validator1.pubkey, bytes(""), bytes32(0)), 1 ether / 1 gwei
-        );
+        vm.startPrank(operator);
+        strategy.stakeEth({
+            validatorStakeData: CompoundingValidatorManager.ValidatorStakeData({
+                pubkey: validator1.pubkey,
+                signature: abi.encodePacked(beaconChain.uniqueDepositId()),
+                depositDataRoot: bytes32(0)
+            }),
+            depositAmountGwei: 1 ether / 1 gwei
+        });
+        vm.stopPrank();
+        // increase uniqueDepositId
+        beaconChain.increaseUniqueDepositId();
 
         // Verify validator
         strategy.verifyValidator(0, validator1.index, hashPubKey(validator1.pubkey), address(strategy), bytes(""));
@@ -41,8 +49,8 @@ contract Deposit_Test is Setup {
             firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
             strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
                 withdrawableEpoch: type(uint64).max,
-                withdrawableEpochProof: abi.encodePacked(uint256(1)) // Todo find something better for the UID.
-             })
+                withdrawableEpochProof: abi.encodePacked(deposits[0].pendingDepositRoot)
+            })
         });
     }
 }
