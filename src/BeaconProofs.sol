@@ -103,11 +103,11 @@ contract BeaconProofs is ValidatorSet {
         uint64, /*withdrawableEpoch*/
         bytes memory withdrawableEpochProof
     ) public view {
-        // 1. Convert withdrawableEpochProof to bytes32 deposit uid
-        bytes32 uid = bytes32(withdrawableEpochProof);
+        // 1. Convert withdrawableEpochProof to bytes32 deposit udid
+        bytes32 udid = bytes32(withdrawableEpochProof);
 
         // 2. Check that the deposit has been processed
-        require(beaconChain.processedDeposits(uid), "Beacon Proofs: Deposit not yet processed or doesn't exist");
+        require(beaconChain.processedDeposits(udid), "Beacon Proofs: Deposit not yet processed or doesn't exist");
     }
 
     function verifyBalancesContainer(

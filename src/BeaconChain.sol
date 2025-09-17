@@ -49,7 +49,7 @@ contract BeaconChain {
         uint64 timestamp;
         uint256 amount; // in wei
         address owner;
-        bytes32 uid;
+        bytes32 udid;
     }
 
     struct Validator {
@@ -120,9 +120,9 @@ contract BeaconChain {
                 pubkey: pubkey,
                 timestamp: uint64(block.timestamp),
                 owner: decodeOwner(withdrawalCredentials),
-                // recreate the pendingDepositRoot, that will be used as unique identifier of the deposit
+                // recreate the pendingDepositRoot, that will be used as unique deposit ID
                 // signature is the value responsible to make the deposit unique
-                uid: beaconProofs.merkleizePendingDeposit({
+                udid: beaconProofs.merkleizePendingDeposit({
                     pubKeyHash: beaconProofs.hashPubKey(pubkey),
                     withdrawalCredentials: withdrawalCredentials,
                     amountGwei: (msg.value / 1 gwei).toUint64(),
@@ -160,7 +160,7 @@ contract BeaconChain {
                     status: Status.DEPOSITED
                 })
             );
-            processedDeposits[pendingDeposit.uid] = true;
+            processedDeposits[pendingDeposit.udid] = true;
             emit BeaconChain___ValidatorCreated(pubkey);
             emit BeaconChain___StatusChanged(pubkey, pendingDeposit.amount, Status.UNKNOWN, Status.DEPOSITED);
             emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount, Status.DEPOSITED);
@@ -182,7 +182,7 @@ contract BeaconChain {
 
         // --- 2.c. Validator exists and is either DEPOSITED, ACTIVE or WITHDRAWABLE: increase stake
         validator.amount += pendingDeposit.amount;
-        processedDeposits[pendingDeposit.uid] = true;
+        processedDeposits[pendingDeposit.udid] = true;
         emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount, currentStatus);
     }
 
@@ -208,7 +208,7 @@ contract BeaconChain {
     /// @dev Only the owner can request withdrawal.
     function withdraw(bytes calldata pubkey, uint256 amount) external {
         withdrawQueue.push(
-            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0), uid: 0 })
+            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0), udid: 0 })
         );
         emit BeaconChain___Withdraw(pubkey, amount);
     }
