@@ -188,13 +188,9 @@ contract BeaconChain {
     /// @param amount The amount to withdraw. If 0, it means full withdrawal.
     /// @dev Only the owner can request withdrawal.
     function withdraw(bytes calldata pubkey, uint256 amount) external {
-        Validator memory validator = validators[getValidatorIndex(pubkey)];
-        if (validator.status != Status.ACTIVE) return; // Only ACTIVE validators can request withdrawal
-
         withdrawQueue.push(
             Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0), uid: 0 })
         );
-
         emit BeaconChain___Withdraw(pubkey, amount);
     }
 
