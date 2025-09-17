@@ -27,7 +27,7 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     /// --- STRUCTS & ENUM
     ////////////////////////////////////////////////////
-    enum ValidatorStatus {
+    enum Status {
         UNKNOWN, // default value
         DEPOSITED, // ensure 1 eth has been deposited, at this stage validator is not yet active
         ACTIVE, // validator is active and participating in consensus
@@ -49,7 +49,7 @@ contract BeaconChain {
         address owner;
         uint256 amount; // in wei
         uint256 slashedAmount; // in wei
-        ValidatorStatus status;
+        Status status;
     }
 
     ////////////////////////////////////////////////////
@@ -64,10 +64,10 @@ contract BeaconChain {
     /// --- ERRORS & EVENTS
     ////////////////////////////////////////////////////
     // Status change events
-    event BeaconChain___StatusChanged(bytes pubkey, uint256 amount, ValidatorStatus oldStatus, ValidatorStatus newStatus);
+    event BeaconChain___StatusChanged(bytes pubkey, uint256 amount, Status oldStatus, Status newStatus);
     // Deposit events
     event BeaconChain___Deposit(bytes pubkey, uint256 amount);
-    event BeaconChain___DepositProcessed(bytes pubkey, uint256 amount, ValidatorStatus status);
+    event BeaconChain___DepositProcessed(bytes pubkey, uint256 amount, Status status);
     event BeaconChain___DepositPostponed(bytes pubkey, uint256 amount);
     // Withdraw events
     event BeaconChain___Withdraw(bytes pubkey, uint256 amount);
@@ -137,25 +137,23 @@ contract BeaconChain {
                     amount: pendingDeposit.amount,
                     slashedAmount: 0,
                     owner: pendingDeposit.owner,
-                    status: ValidatorStatus.DEPOSITED
+                    status: Status.DEPOSITED
                 })
             );
             emit BeaconChain___ValidatorCreated(pubkey);
-            emit BeaconChain___StatusChanged(
-                pubkey, pendingDeposit.amount, ValidatorStatus.UNKNOWN, ValidatorStatus.DEPOSITED
-            );
+            emit BeaconChain___StatusChanged(pubkey, pendingDeposit.amount, Status.UNKNOWN, Status.DEPOSITED);
             return;
         }
 
         // --- 2. Validator exists, handle based on its current status
         Validator storage validator = validators[index];
-        ValidatorStatus currentStatus = validator.status;
+        Status currentStatus = validator.status;
 
         // --- 2.a. UNKNOWN status should never happen
-        if (currentStatus == ValidatorStatus.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
+        if (currentStatus == Status.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
 
         // --- 2.b. Exited validators cannot be reactivated, so deposits are postponed
-        if (currentStatus == ValidatorStatus.EXITED) {
+        if (currentStatus == Status.EXITED) {
             depositQueue.push(pendingDeposit);
             emit BeaconChain___DepositPostponed(pubkey, pendingDeposit.amount);
         }
@@ -189,11 +187,9 @@ contract BeaconChain {
         uint256 len = min(validators.length, count);
         for (uint256 i; i < len; i++) {
             Validator storage validator = validators[i];
-            if (validator.status == ValidatorStatus.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
-                validator.status = ValidatorStatus.ACTIVE;
-                emit BeaconChain___StatusChanged(
-                    validator.pubkey, validator.amount, ValidatorStatus.DEPOSITED, ValidatorStatus.ACTIVE
-                );
+            if (validator.status == Status.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
+                validator.status = Status.ACTIVE;
+                emit BeaconChain___StatusChanged(validator.pubkey, validator.amount, Status.DEPOSITED, Status.ACTIVE);
             }
         }
     }
@@ -208,7 +204,7 @@ contract BeaconChain {
     /// @dev Only the owner can request withdrawal.
     function withdraw(bytes calldata pubkey, uint256 amount) external {
         Validator memory validator = validators[getValidatorIndex(pubkey)];
-        if (validator.status != ValidatorStatus.ACTIVE) return; // Only ACTIVE validators can request withdrawal
+        if (validator.status != Status.ACTIVE) return; // Only ACTIVE validators can request withdrawal
 
         withdrawQueue.push(Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0) }));
 
@@ -231,7 +227,7 @@ contract BeaconChain {
         Validator storage validator = validators[getValidatorIndex(pubkey)];
 
         // Ensure validator is in correct state to process withdrawal
-        if (validator.status != ValidatorStatus.DEPOSITED && validator.status != ValidatorStatus.ACTIVE) {
+        if (validator.status != Status.DEPOSITED && validator.status != Status.ACTIVE) {
             emit BeaconChain___WithdrawNotProcessed(pubkey, "Validator not in DEPOSITED or ACTIVE state");
             return;
         }
@@ -266,8 +262,8 @@ contract BeaconChain {
         // 2. Full withdrawal:
         if (validator.amount == pendingWithdrawal.amount) {
             // Only mark the validator as EXITED, actual withdrawal will be processed in sweep
-            validator.status = ValidatorStatus.EXITED;
-            emit BeaconChain___StatusChanged(pubkey, validator.amount, ValidatorStatus.ACTIVE, ValidatorStatus.EXITED);
+            validator.status = Status.EXITED;
+            emit BeaconChain___StatusChanged(pubkey, validator.amount, Status.ACTIVE, Status.EXITED);
         }
     }
 
@@ -290,7 +286,7 @@ contract BeaconChain {
         uint256 exitedCount;
         uint256 len = validators.length;
         for (uint256 i = 0; i < len; i++) {
-            if (validators[i].status == ValidatorStatus.EXITED) exitedCount++;
+            if (validators[i].status == Status.EXITED) exitedCount++;
         }
         if (exitedCount == 0) return; // No exited validators to process
 
@@ -300,11 +296,9 @@ contract BeaconChain {
         uint256 processed;
         for (uint256 i = 0; i < len && processed < toProcess; i++) {
             Validator storage validator = validators[i];
-            if (validator.status == ValidatorStatus.EXITED) {
-                validator.status = ValidatorStatus.WITHDRAWABLE;
-                emit BeaconChain___StatusChanged(
-                    validator.pubkey, validator.amount, ValidatorStatus.EXITED, ValidatorStatus.WITHDRAWABLE
-                );
+            if (validator.status == Status.EXITED) {
+                validator.status = Status.WITHDRAWABLE;
+                emit BeaconChain___StatusChanged(validator.pubkey, validator.amount, Status.EXITED, Status.WITHDRAWABLE);
                 processed++;
             }
         }
@@ -325,10 +319,10 @@ contract BeaconChain {
         for (uint256 i = 0; i < validators.length; i++) {
             bool success;
             Validator storage validator = validators[i];
-            ValidatorStatus status = validator.status;
-            if (status == ValidatorStatus.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
-            if (status == ValidatorStatus.DEPOSITED) continue;
-            if (status == ValidatorStatus.ACTIVE) {
+            Status status = validator.status;
+            if (status == Status.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
+            if (status == Status.DEPOSITED) continue;
+            if (status == Status.ACTIVE) {
                 if (validator.amount > MAX_EFFECTIVE_BALANCE) {
                     uint256 excess = validator.amount - MAX_EFFECTIVE_BALANCE;
                     validator.amount = MAX_EFFECTIVE_BALANCE;
@@ -339,8 +333,8 @@ contract BeaconChain {
                     emit BeaconChain___Sweep(validator.pubkey, excess);
                 }
             }
-            if (status == ValidatorStatus.EXITED) continue;
-            if (status == ValidatorStatus.WITHDRAWABLE) {
+            if (status == Status.EXITED) continue;
+            if (status == Status.WITHDRAWABLE) {
                 if (validator.amount == 0) continue; // Nothing to withdraw
 
                 // First handle slashed amount if any
@@ -396,7 +390,7 @@ contract BeaconChain {
     ) public {
         Validator memory validator = validators[getValidatorIndex(pubkey)];
         require(ssvRegistreredValidators[pubkey], "Validator not registered");
-        require(validator.status != ValidatorStatus.WITHDRAWABLE, "Cannot remove WITHDRAWABLE validator");
+        require(validator.status != Status.WITHDRAWABLE, "Cannot remove WITHDRAWABLE validator");
         require(validator.amount == 0, "Cannot remove validator with balance");
         ssvRegistreredValidators[pubkey] = false;
 
@@ -410,7 +404,7 @@ contract BeaconChain {
         uint256 index = getValidatorIndex(pubkey);
         require(index < validators.length, "Invalid validator index");
         Validator storage validator = validators[index];
-        require(validator.status == ValidatorStatus.ACTIVE, "Validator must be ACTIVE to receive rewards");
+        require(validator.status == Status.ACTIVE, "Validator must be ACTIVE to receive rewards");
 
         // Increase the validator's amount by the reward
         validator.amount += amount;
@@ -432,15 +426,15 @@ contract BeaconChain {
         Validator storage validator = validators[index];
         require(amount >= MIN_SLASHING_PENALTY, "Slashing amount must be greater than minimum penalty");
         require(validator.amount >= amount, "Insufficient validator balance to slash");
-        require(validator.status == ValidatorStatus.ACTIVE, "Validator must be ACTIVE to be slashed");
+        require(validator.status == Status.ACTIVE, "Validator must be ACTIVE to be slashed");
 
         // Increase slashed amount, decrease validator amount will be done in sweep
         validator.slashedAmount += amount;
 
         // Slashed validators are forced to exit
-        validator.status = ValidatorStatus.EXITED;
+        validator.status = Status.EXITED;
         emit BeaconChain___ValidatorSlashed(pubkey, amount);
-        emit BeaconChain___StatusChanged(pubkey, validator.amount, ValidatorStatus.ACTIVE, ValidatorStatus.EXITED);
+        emit BeaconChain___StatusChanged(pubkey, validator.amount, Status.ACTIVE, Status.EXITED);
     }
 
     /// @notice Returns the protocol fee (not implemented).
