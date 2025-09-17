@@ -212,6 +212,9 @@ contract BeaconChain {
         // Get the validator index corresponding to the pubkey, it must exist
         Validator storage validator = validators[getValidatorIndex(pubkey)];
 
+        // If amount is 0 this is a full withdrawal
+        if (pendingWithdrawal.amount == 0) pendingWithdrawal.amount = validator.amount;
+
         // Ensure validator is in correct state to process withdrawal
         if (validator.status != Status.DEPOSITED && validator.status != Status.ACTIVE) {
             emit BeaconChain___WithdrawNotProcessed(pubkey, "Validator not in DEPOSITED or ACTIVE state");
