@@ -3,10 +3,12 @@ pragma solidity 0.8.29;
 
 // Helper
 import { LibBytes } from "@solady/utils/LibBytes.sol";
+import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
 import { RewardDistributor } from "./RewardDistributor.sol";
 
 contract BeaconChain {
     using LibBytes for bytes;
+    using FixedPointMathLib for uint256;
 
     ////////////////////////////////////////////////////
     /// --- CONSTRANTS & IMMUTABLES
@@ -16,6 +18,7 @@ contract BeaconChain {
     uint256 public constant ACTIVATION_AMOUNT = 32 ether;
     uint256 public constant MIN_SLASHING_PENALTY = 1 ether;
     uint256 public constant MAX_EFFECTIVE_BALANCE = 2048 ether;
+    uint256 public constant FIXED_REWARD_PERCENTAGE = 0.01 ether; // 1% fixed reward for simulation
 
     // Address where slashing rewards are sent to (generated using pk = uint256(keccak256(abi.encodePacked("name")))).
     // Using a real address instead of zero, to track ETH flow in tests.
@@ -394,6 +397,25 @@ contract BeaconChain {
         REWARD_DISTRIBUTOR.distributeRewards(address(this), amount);
 
         emit BeaconChain___RewardsDistributed(pubkey, amount);
+    }
+
+    /// @notice Browse through all active validators and simulate fixed percentage rewards.
+    function simulateRewards() public {
+        uint256 len = validators.length;
+        for (uint256 i = 0; i < len; i++) {
+            Validator storage validator = validators[i];
+            if (validator.status == Status.ACTIVE) {
+                // Calculate reward as a fixed percentage of the validator's amount
+                uint256 reward = validator.amount.mulWad(FIXED_REWARD_PERCENTAGE);
+
+                // Increase the validator's amount by the reward
+                validator.amount += reward;
+
+                // Distribute rewards using RewardDistributor
+                REWARD_DISTRIBUTOR.distributeRewards(address(this), reward);
+                emit BeaconChain___RewardsDistributed(validator.pubkey, reward);
+            }
+        }
     }
 
     /// @notice Slashes a validator by reducing its balance.
