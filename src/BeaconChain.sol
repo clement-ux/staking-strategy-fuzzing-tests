@@ -184,7 +184,7 @@ contract BeaconChain {
 
     /// @notice Request withdrawal of ETH from a validator.
     /// @param pubkey The public key of the validator.
-    /// @param amount The amount to withdraw.
+    /// @param amount The amount to withdraw. If 0, it means full withdrawal.
     /// @dev Only the owner can request withdrawal.
     function withdraw(bytes calldata pubkey, uint256 amount) external {
         Validator memory validator = validators[getValidatorIndex(pubkey)];
@@ -212,9 +212,6 @@ contract BeaconChain {
         // Get the validator index corresponding to the pubkey, it must exist
         Validator storage validator = validators[getValidatorIndex(pubkey)];
 
-        // If amount is 0 this is a full withdrawal
-        if (pendingWithdrawal.amount == 0) pendingWithdrawal.amount = validator.amount;
-
         // Ensure validator is in correct state to process withdrawal
         if (validator.status != Status.DEPOSITED && validator.status != Status.ACTIVE) {
             emit BeaconChain___WithdrawNotProcessed(pubkey, "Validator not in DEPOSITED or ACTIVE state");
@@ -227,16 +224,15 @@ contract BeaconChain {
             return;
         }
 
-        // Ensure the validator has enough balance and deduct the amount
-        if (validator.amount < pendingWithdrawal.amount) {
+        // Ensure the validator has enough balance and deduct the amount for partial withdrawal
+        if (pendingWithdrawal.amount != 0 && validator.amount < ACTIVATION_AMOUNT + pendingWithdrawal.amount) {
             emit BeaconChain___WithdrawNotProcessed(pubkey, "Insufficient validator balance");
             return;
         }
 
         // There is two option, partial or full withdrawal
         // 1. Partial withdrawal:
-        if (validator.amount > pendingWithdrawal.amount && validator.amount - pendingWithdrawal.amount >= ACTIVATION_AMOUNT)
-        {
+        if (pendingWithdrawal.amount != 0 && validator.amount >= ACTIVATION_AMOUNT + pendingWithdrawal.amount) {
             // Reduce instantly the validator amount
             validator.amount -= pendingWithdrawal.amount;
 
@@ -249,11 +245,14 @@ contract BeaconChain {
         }
 
         // 2. Full withdrawal:
-        if (validator.amount == pendingWithdrawal.amount) {
+        if (pendingWithdrawal.amount == 0) {
             // Only mark the validator as EXITED, actual withdrawal will be processed in sweep
             validator.status = Status.EXITED;
             emit BeaconChain___StatusChanged(pubkey, validator.amount, Status.ACTIVE, Status.EXITED);
         }
+
+        // This should never happen, but just in case, to avoid useless fuzz calls
+        revert("Invalid withdrawal request");
     }
 
     /// @notice Processes multiple withdrawals from the withdraw queue.
