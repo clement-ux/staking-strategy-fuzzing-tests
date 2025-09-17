@@ -10,8 +10,8 @@ import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeS
 import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxies.sol";
 
 // Mocks
-import { WETH } from "@solmate/tokens/WETH.sol";
-import { ERC20 } from "@solmate/tokens/ERC20.sol";
+import { MockWETH } from "../src/mock/MockWETH.sol";
+import { MockERC20 } from "../src/mock/MockERC20.sol";
 import { SSVNetwork } from "../src/SSVNetwork.sol";
 import { BeaconRoot } from "../src/BeaconRoot.sol";
 import { BeaconChain } from "../src/BeaconChain.sol";
@@ -52,8 +52,8 @@ contract Base is Test {
     CompoundingStakingSSVStrategyProxy public strategyProxy;
 
     // Mocks
-    WETH public weth;
-    ERC20 public ssv;
+    MockWETH public weth;
+    MockERC20 public ssv;
     SSVNetwork public ssvNetwork;
     BeaconRoot public beaconRoot;
     BeaconChain public beaconChain;

@@ -10,9 +10,8 @@ import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeS
 import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxies.sol";
 
 // Mocks
-import { WETH } from "@solmate/tokens/WETH.sol";
-import { ERC20 } from "@solmate/tokens/ERC20.sol";
-import { MockERC20 } from "@solmate/test/utils/mocks/MockERC20.sol";
+import { MockWETH } from "../src/mock/MockWETH.sol";
+import { MockERC20 } from "../src/mock/MockERC20.sol";
 import { SSVNetwork } from "../src/SSVNetwork.sol";
 import { BeaconRoot } from "../src/BeaconRoot.sol";
 import { BeaconChain } from "../src/BeaconChain.sol";
@@ -90,8 +89,8 @@ contract Setup is Base, ValidatorSet {
         deal(address(beaconChain.REWARD_DISTRIBUTOR()), 1_000_000 ether);
 
         // Deploy WETH and SSV token
-        ssv = ERC20(address(new MockERC20("SSV Token", "SSV", 18)));
-        weth = new WETH();
+        ssv = new MockERC20("SSV Token", "SSV", 18);
+        weth = new MockWETH();
     }
 
     //////////////////////////////////////////////////////
