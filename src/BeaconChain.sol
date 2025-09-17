@@ -214,8 +214,8 @@ contract BeaconChain {
         Validator storage validator = validators[getValidatorIndex(pubkey)];
 
         // Ensure validator is in correct state to process withdrawal
-        if (validator.status != Status.DEPOSITED && validator.status != Status.ACTIVE) {
-            emit BeaconChain___WithdrawNotProcessed(pubkey, "Validator not in DEPOSITED or ACTIVE state");
+        if (validator.status != Status.ACTIVE) {
+            emit BeaconChain___WithdrawNotProcessed(pubkey, "Validator not ACTIVE state");
             return;
         }
 
