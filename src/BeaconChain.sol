@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+// Helper
 import { LibBytes } from "@solady/utils/LibBytes.sol";
-
 import { RewardDistributor } from "./RewardDistributor.sol";
 
 contract BeaconChain {
@@ -13,7 +13,6 @@ contract BeaconChain {
     ////////////////////////////////////////////////////
     uint256 public constant NOT_FOUND = type(uint256).max;
     uint256 public constant MIN_DEPOSIT = 1 ether;
-    uint256 public constant MIN_EXIT_AMOUNT = 16 ether;
     uint256 public constant ACTIVATION_AMOUNT = 32 ether;
     uint256 public constant MIN_SLASHING_PENALTY = 1 ether;
     uint256 public constant MAX_EFFECTIVE_BALANCE = 2048 ether;
@@ -175,25 +174,6 @@ contract BeaconChain {
         }
     }
 
-    /// @notice Activates all eligible validators.
-    function activateValidators() public {
-        activateValidators(validators.length);
-    }
-
-    /// @notice Goes through all validators and activates those that are `DEPOSITED` and have enough ETH.
-    function activateValidators(
-        uint256 count
-    ) public {
-        uint256 len = min(validators.length, count);
-        for (uint256 i; i < len; i++) {
-            Validator storage validator = validators[i];
-            if (validator.status == Status.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
-                validator.status = Status.ACTIVE;
-                emit BeaconChain___StatusChanged(validator.pubkey, validator.amount, Status.DEPOSITED, Status.ACTIVE);
-            }
-        }
-    }
-
     ////////////////////////////////////////////////////
     /// --- WITHDRAW FUNCTIONS
     ////////////////////////////////////////////////////
@@ -274,6 +254,28 @@ contract BeaconChain {
         uint256 len = min(withdrawQueue.length, count);
         for (uint256 i; i < len; i++) {
             processWithdraw();
+        }
+    }
+
+    ////////////////////////////////////////////////////
+    /// --- VALIDATORS MANAGEMENT FUNCTIONS
+    ////////////////////////////////////////////////////
+    /// @notice Activates all eligible validators.
+    function activateValidators() public {
+        activateValidators(validators.length);
+    }
+
+    /// @notice Goes through all validators and activates those that are `DEPOSITED` and have enough ETH.
+    function activateValidators(
+        uint256 count
+    ) public {
+        uint256 len = min(validators.length, count);
+        for (uint256 i; i < len; i++) {
+            Validator storage validator = validators[i];
+            if (validator.status == Status.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
+                validator.status = Status.ACTIVE;
+                emit BeaconChain___StatusChanged(validator.pubkey, validator.amount, Status.DEPOSITED, Status.ACTIVE);
+            }
         }
     }
 
@@ -368,35 +370,6 @@ contract BeaconChain {
         }
     }
 
-    ////////////////////////////////////////////////////
-    /// --- VALIDATORS MANAGEMENT FUNCTIONS
-    ////////////////////////////////////////////////////
-    /// @notice Registers a validator in the SSVNetwork.
-    /// @param pubkey The public key of the validator.
-    function registerSsvValidator(
-        bytes memory pubkey
-    ) public {
-        require(!ssvRegistreredValidators[pubkey], "Validator already registered");
-        ssvRegistreredValidators[pubkey] = true;
-
-        emit SSVNetwork___ValidatorRegistered(pubkey);
-    }
-
-    /// @notice Removes a validator from the SSVNetwork.
-    /// @param pubkey The public key of the validator.
-    /// @dev Validator must have zero balance and not be withdrawable.
-    function removeSsvValidator(
-        bytes memory pubkey
-    ) public {
-        Validator memory validator = validators[getValidatorIndex(pubkey)];
-        require(ssvRegistreredValidators[pubkey], "Validator not registered");
-        require(validator.status != Status.WITHDRAWABLE, "Cannot remove WITHDRAWABLE validator");
-        require(validator.amount == 0, "Cannot remove validator with balance");
-        ssvRegistreredValidators[pubkey] = false;
-
-        emit SSVNetwork___ValidatorRemoved(pubkey);
-    }
-
     /// @notice Simulates reward distribution to a validator.
     /// @param pubkey The public key of the validator.
     /// @param amount The amount of rewards to distribute.
@@ -439,6 +412,36 @@ contract BeaconChain {
 
     /// @notice Returns the protocol fee (not implemented).
     function fee() external pure returns (uint256) { }
+
+    ////////////////////////////////////////////////////
+    /// --- SSV FUNCTIONS
+    ////////////////////////////////////////////////////
+
+    /// @notice Registers a validator in the SSVNetwork.
+    /// @param pubkey The public key of the validator.
+    function registerSsvValidator(
+        bytes memory pubkey
+    ) public {
+        require(!ssvRegistreredValidators[pubkey], "Validator already registered");
+        ssvRegistreredValidators[pubkey] = true;
+
+        emit SSVNetwork___ValidatorRegistered(pubkey);
+    }
+
+    /// @notice Removes a validator from the SSVNetwork.
+    /// @param pubkey The public key of the validator.
+    /// @dev Validator must have zero balance and not be withdrawable.
+    function removeSsvValidator(
+        bytes memory pubkey
+    ) public {
+        Validator memory validator = validators[getValidatorIndex(pubkey)];
+        require(ssvRegistreredValidators[pubkey], "Validator not registered");
+        require(validator.status != Status.WITHDRAWABLE, "Cannot remove WITHDRAWABLE validator");
+        require(validator.amount == 0, "Cannot remove validator with balance");
+        ssvRegistreredValidators[pubkey] = false;
+
+        emit SSVNetwork___ValidatorRemoved(pubkey);
+    }
 
     ////////////////////////////////////////////////////
     /// --- HELPER FUNCTIONS
@@ -531,17 +534,3 @@ contract BeaconChain {
         return NOT_FOUND; // Not found
     }
 }
-
-// --- List of actions ---
-// processDeposit
-// activateValidators
-// processExit
-// processWithdraw
-// processSweep
-// simulateRewards
-// slash
-
-// --- Process epoch ---
-// activate validators
-// process slashing
-// process deposits
