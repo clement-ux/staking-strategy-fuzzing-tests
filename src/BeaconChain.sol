@@ -16,9 +16,9 @@ contract BeaconChain {
     uint256 public constant NOT_FOUND = type(uint256).max;
     uint256 public constant MIN_DEPOSIT = 1 ether;
     uint256 public constant ACTIVATION_AMOUNT = 32 ether;
-    uint256 public constant MIN_SLASHING_PENALTY = 1 ether;
     uint256 public constant MAX_EFFECTIVE_BALANCE = 2048 ether;
     uint256 public constant FIXED_REWARD_PERCENTAGE = 0.01 ether; // 1% fixed reward for simulation
+    uint256 public constant SLASHING_PENALTY_MULTIPLICATOR = 0.00024375 ether;
 
     // Address where slashing rewards are sent to (generated using pk = uint256(keccak256(abi.encodePacked("name")))).
     // Using a real address instead of zero, to track ETH flow in tests.
@@ -410,9 +410,13 @@ contract BeaconChain {
         require(index < validators.length, "Invalid validator index");
 
         Validator storage validator = validators[index];
-        require(amount >= MIN_SLASHING_PENALTY, "Slashing amount must be greater than minimum penalty");
         require(validator.amount >= amount, "Insufficient validator balance to slash");
         require(validator.status == Status.ACTIVE, "Validator must be ACTIVE to be slashed");
+        require(
+            amount >= SLASHING_PENALTY_MULTIPLICATOR * validator.amount,
+            "Slashing amount must be greater than minimum penalty"
+        );
+        require(amount <= validator.amount, "Slashing amount exceeds validator balance");
 
         // Increase slashed amount, decrease validator amount will be done in sweep
         validator.amount -= amount;
@@ -454,10 +458,12 @@ contract BeaconChain {
     ) public {
         require(ssvRegisteredValidators[pubkey], "Validator not registered");
 
-        if (validators[getValidatorIndex(pubkey)].status == Status.DEPOSITED) return; // Cannot remove if still DEPOSITED
+        Validator memory validator = validators[getValidatorIndex(pubkey)];
+
+        if (validator.status == Status.DEPOSITED) return; // Cannot remove if still DEPOSITED
 
         // Force exit if validator is still active
-        if (validators[getValidatorIndex(pubkey)].status == Status.ACTIVE) slash(pubkey, MIN_SLASHING_PENALTY);
+        if (validator.status == Status.ACTIVE) slash(pubkey, SLASHING_PENALTY_MULTIPLICATOR * validator.amount);
 
         ssvRegisteredValidators[pubkey] = false;
         emit SSVNetwork___ValidatorRemoved(pubkey);
