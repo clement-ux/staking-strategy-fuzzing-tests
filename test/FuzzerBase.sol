@@ -13,12 +13,20 @@ abstract contract FuzzerBase {
     ////////////////////////////////////////////////////
     /// --- STORAGE
     ////////////////////////////////////////////////////
-    bytes[] public registeredSsvValidators;
+    bytes[] public registeredSsvValidators; // Validators that are marked as registered
+    bytes[] public stakedValidators; // Validators that are marked as staked
+    bytes[] public verifiedValidators; // Validators that are marked as verified
 
     ////////////////////////////////////////////////////
     /// --- HELPERS
     ////////////////////////////////////////////////////
     function min(uint256 a, uint256 b) public pure returns (uint256) {
         return a < b ? a : b;
+    }
+
+    function removeFromArray(bytes[] storage array, uint256 index) internal {
+        require(index < array.length, "Index out of bounds");
+        array[index] = array[array.length - 1];
+        array.pop();
     }
 }
