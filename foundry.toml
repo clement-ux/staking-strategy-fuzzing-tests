@@ -6,8 +6,9 @@ verbosity = 3
 show_progress = true
 auto_detect_remappings = false
 ignored_warnings_from = ["dependencies/"]
-ignored_error_codes = [3628, 5574]
+ignored_error_codes = [3628, 3860, 5574]
 # code-size: 5574
+# init-code-size: 3860
 # missing-receive-ether: 3628
 
 remappings = [

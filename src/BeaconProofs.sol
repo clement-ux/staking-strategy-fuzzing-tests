@@ -36,6 +36,7 @@ contract BeaconProofs is ValidatorSet {
         uint64 slot
     ) public pure returns (bytes32) {
         slot; // to silence solc warning about unused variable
+        // forge-lint: disable-next-line(asm-keccak256)
         return keccak256(abi.encodePacked(pubKeyHash, withdrawalCredentials, amountGwei, signature));
     }
 
@@ -95,6 +96,8 @@ contract BeaconProofs is ValidatorSet {
     /// @param withdrawableEpochProof is used to pass the unique deposit identifier
     function verifyValidatorWithdrawable(bytes32, uint40, uint64, bytes memory withdrawableEpochProof) public view {
         // 1. Convert withdrawableEpochProof to bytes32 deposit udid
+        require(withdrawableEpochProof.length == 32, "Beacon Proofs: Invalid withdrawableEpochProof length");
+        // forge-lint: disable-next-line(unsafe-typecast)
         bytes32 udid = bytes32(withdrawableEpochProof);
 
         // 2. Check that the deposit has been processed
