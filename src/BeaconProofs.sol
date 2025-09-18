@@ -107,9 +107,13 @@ contract BeaconProofs is ValidatorSet {
         bytes32 udid = bytes32(withdrawableEpochProof);
 
         // 2. Check that the deposit has been processed
-        require(beaconChain.processedDeposits(udid), "Beacon Proofs: Deposit not yet processed or doesn't exist");
+        require(
+            beaconChain.processedDeposits(udid) == BeaconChain.DepositStatus.PROCESSED,
+            "Beacon Proofs: Deposit not yet processed or doesn't exist"
+        );
     }
 
+    /// @notice As this is just a call to this function, we do not need to verify anything
     function verifyBalancesContainer(
         bytes32, /*beaconBlockRoot*/
         bytes32, /*balancesContainerRoot*/
@@ -117,22 +121,42 @@ contract BeaconProofs is ValidatorSet {
     ) public pure { }
 
     function verifyValidatorBalance(
-        bytes32, /*balancesContainerRoot*/
-        uint40, /*validatorIndex*/
-        uint64, /*balance*/
-        bytes memory /*balanceProof*/
-    ) public pure returns (uint256) { }
+        bytes32 balancesContainerRoot,
+        bytes32 validatorBalanceLeaf,
+        bytes calldata balanceProof,
+        uint40 validatorIndex
+    ) public view returns (uint256) {
+        balancesContainerRoot; // to silence solc warning about unused variable
+        validatorBalanceLeaf; // to silence solc warning about unused variable
+        balanceProof; // to silence solc warning about unused variable
+        // Get the validator pubkey from the index
+        bytes memory pubkey = indexToPubkey[validatorIndex];
 
+        // Get validator index in the `validators` array of the BeaconChain
+        uint256 validatorArrayIndex = beaconChain.getValidatorIndex(pubkey);
+
+        // Get the validator from the BeaconChain
+        BeaconChain.Validator memory validator = beaconChain.getValidator(validatorArrayIndex);
+
+        // Get the balance from the validator
+        uint256 balance = validator.amount;
+
+        // Return the balance in gwei
+        return balance / 1 gwei;
+    }
+
+    /// @notice As this is just a call to this function, we do not need to verify anything
     function verifyPendingDepositsContainer(
         bytes32, /*beaconBlockRoot*/
         bytes32, /*pendingDepositsContainerRoot*/
         bytes memory /*pendingDepositsContainerProof*/
     ) public pure { }
 
-    function verifyPendingDeposit(
-        bytes32, /*pendingDepositsContainerRoot*/
-        bytes32, /*pendingDepositLeaf*/
-        bytes memory, /*pendingDepositProof*/
-        uint64 /*index*/
-    ) public pure returns (bool) { }
+    /// @notice Check that the pending deposit is still pending
+    function verifyPendingDeposit(bytes32, bytes32 pendingDepositRoot, bytes calldata, uint32) public view {
+        require(
+            beaconChain.processedDeposits(pendingDepositRoot) == BeaconChain.DepositStatus.PENDING,
+            "Beacon Proofs: Deposit already processed"
+        );
+    }
 }
