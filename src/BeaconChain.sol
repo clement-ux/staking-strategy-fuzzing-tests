@@ -66,7 +66,6 @@ contract BeaconChain {
     Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
 
-    uint256 public uniqueDepositId = 100; // unique identifier for deposits, starting at 100 to avoid confusion with 0
     mapping(bytes32 id => bool processed) public processedDeposits; // to help tracking processed deposits
     mapping(bytes pubkey => bool registered) public ssvRegisteredValidators; // mapping of SSV registered validators
 
@@ -522,11 +521,6 @@ contract BeaconChain {
     /// @return The minimum value.
     function min(uint256 a, uint256 b) public pure returns (uint256) {
         return a < b ? a : b;
-    }
-
-    /// @notice Increases the unique deposit ID (for testing purposes).
-    function increaseUniqueDepositId() public {
-        uniqueDepositId++;
     }
 
     /// @notice Sets the BeaconProofs contract address.

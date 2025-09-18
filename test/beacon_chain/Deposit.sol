@@ -26,14 +26,12 @@ contract Deposit_Test is Setup {
         strategy.stakeEth({
             validatorStakeData: CompoundingValidatorManager.ValidatorStakeData({
                 pubkey: validator1.pubkey,
-                signature: abi.encodePacked(beaconChain.uniqueDepositId()),
+                signature: abi.encodePacked(depositContract.uniqueDepositId()),
                 depositDataRoot: bytes32(0)
             }),
             depositAmountGwei: 1 ether / 1 gwei
         });
         vm.stopPrank();
-        // increase uniqueDepositId
-        beaconChain.increaseUniqueDepositId();
 
         // Verify validator
         strategy.verifyValidator(0, validator1.index, hashPubKey(validator1.pubkey), address(strategy), bytes(""));
