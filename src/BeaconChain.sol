@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+// Contracts
+import { BeaconProofs } from "./BeaconProofs.sol";
+import { RewardDistributor } from "./RewardDistributor.sol";
+
 // Helper
 import { LibBytes } from "@solady/utils/LibBytes.sol";
+import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
 import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
-import { RewardDistributor } from "./RewardDistributor.sol";
 
 contract BeaconChain {
     using LibBytes for bytes;
+    using SafeCastLib for uint256;
     using FixedPointMathLib for uint256;
 
     ////////////////////////////////////////////////////
@@ -44,7 +49,7 @@ contract BeaconChain {
         uint64 timestamp;
         uint256 amount; // in wei
         address owner;
-        uint256 uid;
+        bytes32 udid;
     }
 
     struct Validator {
@@ -60,8 +65,11 @@ contract BeaconChain {
     Queue[] public depositQueue;
     Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
+
+    mapping(bytes32 id => bool processed) public processedDeposits; // to help tracking processed deposits
     mapping(bytes pubkey => bool registered) public ssvRegisteredValidators; // mapping of SSV registered validators
-    mapping(bytes pubkey => uint256 uid) public depositUID; // unique identifier for each deposit, to prevent duplicates
+
+    BeaconProofs public beaconProofs;
 
     ////////////////////////////////////////////////////
     /// --- ERRORS & EVENTS
@@ -100,7 +108,7 @@ contract BeaconChain {
     function deposit(
         bytes calldata pubkey,
         bytes calldata withdrawalCredentials,
-        bytes calldata, /*signature*/
+        bytes calldata signature,
         bytes32 /*deposit_data_root*/
     ) public payable {
         require(msg.value >= MIN_DEPOSIT, "Minimum deposit is 1 ETH");
@@ -111,10 +119,17 @@ contract BeaconChain {
                 pubkey: pubkey,
                 timestamp: uint64(block.timestamp),
                 owner: decodeOwner(withdrawalCredentials),
-                uid: depositUID[pubkey]
+                // recreate the pendingDepositRoot, that will be used as unique deposit ID
+                // signature is the value responsible to make the deposit unique
+                udid: beaconProofs.merkleizePendingDeposit({
+                    pubKeyHash: beaconProofs.hashPubKey(pubkey),
+                    withdrawalCredentials: withdrawalCredentials,
+                    amountGwei: (msg.value / 1 gwei).toUint64(),
+                    signature: signature,
+                    slot: 0
+                })
             })
         );
-        depositUID[pubkey]++; // increment uid to ensure uniqueness for next deposit
         emit BeaconChain___Deposit(pubkey, msg.value);
     }
 
@@ -144,8 +159,10 @@ contract BeaconChain {
                     status: Status.DEPOSITED
                 })
             );
+            processedDeposits[pendingDeposit.udid] = true;
             emit BeaconChain___ValidatorCreated(pubkey);
             emit BeaconChain___StatusChanged(pubkey, pendingDeposit.amount, Status.UNKNOWN, Status.DEPOSITED);
+            emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount, Status.DEPOSITED);
             return;
         }
 
@@ -164,6 +181,7 @@ contract BeaconChain {
 
         // --- 2.c. Validator exists and is either DEPOSITED, ACTIVE or WITHDRAWABLE: increase stake
         validator.amount += pendingDeposit.amount;
+        processedDeposits[pendingDeposit.udid] = true;
         emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount, currentStatus);
     }
 
@@ -189,7 +207,7 @@ contract BeaconChain {
     /// @dev Only the owner can request withdrawal.
     function withdraw(bytes calldata pubkey, uint256 amount) external {
         withdrawQueue.push(
-            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0), uid: 0 })
+            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0), udid: 0 })
         );
         emit BeaconChain___Withdraw(pubkey, amount);
     }
@@ -503,6 +521,13 @@ contract BeaconChain {
     /// @return The minimum value.
     function min(uint256 a, uint256 b) public pure returns (uint256) {
         return a < b ? a : b;
+    }
+
+    /// @notice Sets the BeaconProofs contract address.
+    function setBeaconProofs(
+        address _beaconProofs
+    ) public {
+        beaconProofs = BeaconProofs(_beaconProofs);
     }
 
     ////////////////////////////////////////////////////
