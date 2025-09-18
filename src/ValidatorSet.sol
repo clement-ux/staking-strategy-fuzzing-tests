@@ -13,6 +13,7 @@ contract ValidatorSet {
     /// --- CONSTANTS & IMMUTABLES
     ////////////////////////////////////////////////////
     uint256 public constant MAX_VALIDATORS = 21;
+    uint256 public constant MAX_VERIFIED_VALIDATORS = 48;
 
     ////////////////////////////////////////////////////
     /// --- STRUCTS & ENUMS
