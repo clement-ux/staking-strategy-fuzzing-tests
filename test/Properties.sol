@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 // Test imports
-import { Setup } from "test/Setup.sol";
+import { TargetFunctions } from "test/TargetFunctions.sol";
 
 /// @title Properties
 /// @notice Abstract contract defining invariant properties for formal verification and fuzzing.
@@ -12,7 +12,7 @@ import { Setup } from "test/Setup.sol";
 ///         - Properties should be stateless and deterministic
 ///         - Property names should clearly indicate what invariant they check
 ///         Usage: Properties are called by fuzzing contracts to validate system state
-abstract contract Properties is Setup {
+abstract contract Properties is TargetFunctions {
     // ╔══════════════════════════════════════════════════════════════════════════════╗
     // ║                         ✦✦✦ INVARIANT PROPERTIES ✦✦✦                         ║
     // ╚══════════════════════════════════════════════════════════════════════════════╝

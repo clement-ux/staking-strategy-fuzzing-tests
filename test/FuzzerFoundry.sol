@@ -2,17 +2,17 @@
 pragma solidity 0.8.29;
 
 // Test imports
-import { TargetFunctions } from "test/TargetFunctions.sol";
+import { Properties } from "test/Properties.sol";
 
 /// @title FuzzerFoundry
 /// @notice Concrete fuzzing contract implementing Foundry's invariant testing framework.
 /// @dev    This contract configures and executes property-based testing:
-///         - Inherits from TargetFunctions to access handler functions and properties
+///         - Inherits from Properties to access handler functions and properties
 ///         - Configures fuzzer targeting (contracts, selectors, senders)
 ///         - Implements invariant test functions that call property validators
 ///         - Each invariant function represents a critical system property to maintain
 ///         - Fuzzer will call targeted handlers randomly and check invariants after each call
-contract FuzzerFoundry is TargetFunctions {
+contract FuzzerFoundry is Properties {
     //////////////////////////////////////////////////////
     /// --- SETUP
     //////////////////////////////////////////////////////
