@@ -43,6 +43,13 @@ contract BeaconChain {
 
     }
 
+    enum DepositStatus {
+        UNKNOWN, // default value
+        PENDING, // deposit is in the queue, waiting to be processed
+        PROCESSED // deposit has been processed
+
+    }
+
     /// @notice Struct used to represent: Deposit, Pending, Exiting and Withdraw
     struct Queue {
         bytes pubkey;
@@ -66,8 +73,8 @@ contract BeaconChain {
     Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
 
-    mapping(bytes32 id => bool processed) public processedDeposits; // to help tracking processed deposits
     mapping(bytes pubkey => bool registered) public ssvRegisteredValidators; // mapping of SSV registered validators
+    mapping(bytes32 id => DepositStatus processed) public processedDeposits; // to help tracking processed deposits
 
     BeaconProofs public beaconProofs;
 
@@ -113,21 +120,27 @@ contract BeaconChain {
     ) public payable {
         require(msg.value >= MIN_DEPOSIT, "Minimum deposit is 1 ETH");
         require(ssvRegisteredValidators[pubkey], "Validator not registered in SSVNetwork");
+
+        // recreate the pendingDepositRoot, that will be used as unique deposit ID
+        // signature is the value responsible to make the deposit unique
+        bytes32 udid = beaconProofs.merkleizePendingDeposit({
+            pubKeyHash: beaconProofs.hashPubKey(pubkey),
+            withdrawalCredentials: withdrawalCredentials,
+            amountGwei: (msg.value / 1 gwei).toUint64(),
+            signature: signature,
+            slot: 0
+        });
+        // This check is only for the sake of the fuzz test
+        require(processedDeposits[udid] == DepositStatus.UNKNOWN, "Deposit with same UDID already processed");
+        processedDeposits[udid] = DepositStatus.PENDING;
+
         depositQueue.push(
             Queue({
                 amount: msg.value,
                 pubkey: pubkey,
                 timestamp: uint64(block.timestamp),
                 owner: decodeOwner(withdrawalCredentials),
-                // recreate the pendingDepositRoot, that will be used as unique deposit ID
-                // signature is the value responsible to make the deposit unique
-                udid: beaconProofs.merkleizePendingDeposit({
-                    pubKeyHash: beaconProofs.hashPubKey(pubkey),
-                    withdrawalCredentials: withdrawalCredentials,
-                    amountGwei: (msg.value / 1 gwei).toUint64(),
-                    signature: signature,
-                    slot: 0
-                })
+                udid: udid
             })
         );
         emit BeaconChain___Deposit(pubkey, msg.value);
@@ -159,7 +172,7 @@ contract BeaconChain {
                     status: Status.DEPOSITED
                 })
             );
-            processedDeposits[pendingDeposit.udid] = true;
+            processedDeposits[pendingDeposit.udid] = DepositStatus.PROCESSED;
             emit BeaconChain___ValidatorCreated(pubkey);
             emit BeaconChain___StatusChanged(pubkey, pendingDeposit.amount, Status.UNKNOWN, Status.DEPOSITED);
             emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount, Status.DEPOSITED);
@@ -181,7 +194,7 @@ contract BeaconChain {
 
         // --- 2.c. Validator exists and is either DEPOSITED, ACTIVE or WITHDRAWABLE: increase stake
         validator.amount += pendingDeposit.amount;
-        processedDeposits[pendingDeposit.udid] = true;
+        processedDeposits[pendingDeposit.udid] = DepositStatus.PROCESSED;
         emit BeaconChain___DepositProcessed(pubkey, pendingDeposit.amount, currentStatus);
     }
 
@@ -205,9 +218,9 @@ contract BeaconChain {
     /// @param pubkey The public key of the validator.
     /// @param amount The amount to withdraw. If 0, it means full withdrawal.
     /// @dev Only the owner can request withdrawal.
-    function withdraw(bytes calldata pubkey, uint256 amount) external {
+    function withdraw(bytes calldata pubkey, uint256 amount, address requester) external {
         withdrawQueue.push(
-            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0), udid: 0 })
+            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: requester, udid: 0 })
         );
         emit BeaconChain___Withdraw(pubkey, amount);
     }
@@ -234,7 +247,7 @@ contract BeaconChain {
         }
 
         // Ensure only the owner can request withdrawal
-        if (validator.owner != msg.sender) {
+        if (validator.owner != pendingWithdrawal.owner) {
             emit BeaconChain___WithdrawNotProcessed(pubkey, "Only owner can request withdrawal");
             return;
         }
@@ -264,6 +277,7 @@ contract BeaconChain {
             // Only mark the validator as EXITED, actual withdrawal will be processed in sweep
             validator.status = Status.EXITED;
             emit BeaconChain___StatusChanged(pubkey, validator.amount, Status.ACTIVE, Status.EXITED);
+            return;
         }
 
         // This should never happen, but just in case, to avoid useless fuzz calls

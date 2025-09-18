@@ -84,5 +84,219 @@ contract Deposit_Test is Setup {
                 withdrawableEpochProof: abi.encodePacked(deposits[0].pendingDepositRoot)
             })
         });
+
+        // Stake 2 ETH
+        weth.mint(address(strategy), 2 ether);
+        vm.startPrank(operator);
+        strategy.stakeEth({
+            validatorStakeData: CompoundingValidatorManager.ValidatorStakeData({
+                pubkey: validator1.pubkey,
+                signature: abi.encodePacked(depositContract.uniqueDepositId()),
+                depositDataRoot: bytes32(0)
+            }),
+            depositAmountGwei: 2 ether / 1 gwei
+        });
+        vm.stopPrank();
+
+        // Stake 3 ETH
+        weth.mint(address(strategy), 3 ether);
+        vm.startPrank(operator);
+        strategy.stakeEth({
+            validatorStakeData: CompoundingValidatorManager.ValidatorStakeData({
+                pubkey: validator1.pubkey,
+                signature: abi.encodePacked(depositContract.uniqueDepositId()),
+                depositDataRoot: bytes32(0)
+            }),
+            depositAmountGwei: 3 ether / 1 gwei
+        });
+        vm.stopPrank();
+
+        // Snap balance
+        strategy.snapBalances();
+
+        console.log("Verify balance for the first time");
+        uint256 validValidators = strategy.verifiedValidatorsLength();
+        uint256 pendingDeposits = strategy.depositListLength();
+        // Verify balance
+        strategy.verifyBalances({
+            balanceProofs: CompoundingValidatorManager.BalanceProofs({
+                balancesContainerRoot: bytes32(0),
+                balancesContainerProof: bytes(""),
+                validatorBalanceLeaves: new bytes32[](validValidators),
+                validatorBalanceProofs: new bytes[](validValidators)
+            }),
+            pendingDepositProofs: CompoundingValidatorManager.PendingDepositProofs({
+                pendingDepositContainerRoot: bytes32(0),
+                pendingDepositContainerProof: bytes(""),
+                pendingDepositIndexes: new uint32[](pendingDeposits),
+                pendingDepositProofs: new bytes[](pendingDeposits)
+            })
+        });
+
+        // Activeate validator
+        beaconChain.activateValidators();
+
+        // Process 1 deposit on BeaconChain
+        beaconChain.processDeposit();
+
+        // Verify deposit
+        deposits = strategyView.getPendingDeposits();
+        strategy.verifyDeposit({
+            pendingDepositRoot: deposits[0].pendingDepositRoot,
+            depositProcessedSlot: deposits[0].slot + 1,
+            firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
+            strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
+                withdrawableEpoch: type(uint64).max,
+                withdrawableEpochProof: abi.encodePacked(deposits[0].pendingDepositRoot)
+            })
+        });
+
+        // Snap balance
+        skip(1 hours);
+        strategy.snapBalances();
+
+        console.log("Verify balance for the second time");
+        // Verify balance
+        validValidators = strategy.verifiedValidatorsLength();
+        pendingDeposits = strategy.depositListLength();
+        strategy.verifyBalances({
+            balanceProofs: CompoundingValidatorManager.BalanceProofs({
+                balancesContainerRoot: bytes32(0),
+                balancesContainerProof: bytes(""),
+                validatorBalanceLeaves: new bytes32[](validValidators),
+                validatorBalanceProofs: new bytes[](validValidators)
+            }),
+            pendingDepositProofs: CompoundingValidatorManager.PendingDepositProofs({
+                pendingDepositContainerRoot: bytes32(0),
+                pendingDepositContainerProof: bytes(""),
+                pendingDepositIndexes: new uint32[](pendingDeposits),
+                pendingDepositProofs: new bytes[](pendingDeposits)
+            })
+        });
+
+        // Get state
+        beaconChain.getValidators();
+        beaconChain.getDepositQueue();
+
+        // Withdraw 1 ETH
+        vm.startPrank(operator);
+        strategy.validatorWithdrawal(validator1.pubkey, uint64(1 ether / 1 gwei));
+
+        // Process withdraw on BeaconChain
+        beaconChain.processWithdraw();
+
+        // Check state
+        beaconChain.getValidators();
+        beaconChain.getDepositQueue();
+        beaconChain.getWithdrawQueue();
+
+        // Process last deposit on BeaconChain
+        beaconChain.processDeposit();
+
+        // Verify deposit
+        deposits = strategyView.getPendingDeposits();
+        strategy.verifyDeposit({
+            pendingDepositRoot: deposits[0].pendingDepositRoot,
+            depositProcessedSlot: deposits[0].slot + 1,
+            firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
+            strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
+                withdrawableEpoch: type(uint64).max,
+                withdrawableEpochProof: abi.encodePacked(deposits[0].pendingDepositRoot)
+            })
+        });
+
+        // Snap balance
+        skip(1 hours);
+        strategy.snapBalances();
+
+        // Verify balance
+        validValidators = strategy.verifiedValidatorsLength();
+        pendingDeposits = strategy.depositListLength();
+        strategy.verifyBalances({
+            balanceProofs: CompoundingValidatorManager.BalanceProofs({
+                balancesContainerRoot: bytes32(0),
+                balancesContainerProof: bytes(""),
+                validatorBalanceLeaves: new bytes32[](validValidators),
+                validatorBalanceProofs: new bytes[](validValidators)
+            }),
+            pendingDepositProofs: CompoundingValidatorManager.PendingDepositProofs({
+                pendingDepositContainerRoot: bytes32(0),
+                pendingDepositContainerProof: bytes(""),
+                pendingDepositIndexes: new uint32[](pendingDeposits),
+                pendingDepositProofs: new bytes[](pendingDeposits)
+            })
+        });
+
+        // Get state
+        beaconChain.getValidators();
+        beaconChain.getDepositQueue();
+        beaconChain.getWithdrawQueue();
+
+        // Full withdraw
+        vm.startPrank(operator);
+        strategy.validatorWithdrawal(validator1.pubkey, 0);
+        vm.stopPrank();
+
+        console.log("Process withdraw");
+        // Get state before
+        beaconChain.getValidators();
+        beaconChain.getDepositQueue();
+        beaconChain.getWithdrawQueue();
+        // Process withdraw on BeaconChain
+        beaconChain.processWithdraw();
+
+        // Snap balance
+        skip(1 hours);
+        strategy.snapBalances();
+
+        // Verify balance
+        validValidators = strategy.verifiedValidatorsLength();
+        pendingDeposits = strategy.depositListLength();
+        strategy.verifyBalances({
+            balanceProofs: CompoundingValidatorManager.BalanceProofs({
+                balancesContainerRoot: bytes32(0),
+                balancesContainerProof: bytes(""),
+                validatorBalanceLeaves: new bytes32[](validValidators),
+                validatorBalanceProofs: new bytes[](validValidators)
+            }),
+            pendingDepositProofs: CompoundingValidatorManager.PendingDepositProofs({
+                pendingDepositContainerRoot: bytes32(0),
+                pendingDepositContainerProof: bytes(""),
+                pendingDepositIndexes: new uint32[](pendingDeposits),
+                pendingDepositProofs: new bytes[](pendingDeposits)
+            })
+        });
+
+        // Get state
+        beaconChain.getValidators();
+        beaconChain.getDepositQueue();
+
+        // Deactivate validator
+        beaconChain.deactivateValidator();
+
+        // Process sweep
+        beaconChain.processSweep();
+
+        // Snap balance
+        skip(1 hours);
+        strategy.snapBalances();
+
+        // Verify balance
+        validValidators = strategy.verifiedValidatorsLength();
+        pendingDeposits = strategy.depositListLength();
+        strategy.verifyBalances({
+            balanceProofs: CompoundingValidatorManager.BalanceProofs({
+                balancesContainerRoot: bytes32(0),
+                balancesContainerProof: bytes(""),
+                validatorBalanceLeaves: new bytes32[](validValidators),
+                validatorBalanceProofs: new bytes[](validValidators)
+            }),
+            pendingDepositProofs: CompoundingValidatorManager.PendingDepositProofs({
+                pendingDepositContainerRoot: bytes32(0),
+                pendingDepositContainerProof: bytes(""),
+                pendingDepositIndexes: new uint32[](pendingDeposits),
+                pendingDepositProofs: new bytes[](pendingDeposits)
+            })
+        });
     }
 }
