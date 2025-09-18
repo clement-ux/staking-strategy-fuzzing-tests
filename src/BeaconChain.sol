@@ -218,9 +218,9 @@ contract BeaconChain {
     /// @param pubkey The public key of the validator.
     /// @param amount The amount to withdraw. If 0, it means full withdrawal.
     /// @dev Only the owner can request withdrawal.
-    function withdraw(bytes calldata pubkey, uint256 amount) external {
+    function withdraw(bytes calldata pubkey, uint256 amount, address requester) external {
         withdrawQueue.push(
-            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: address(0), udid: 0 })
+            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: requester, udid: 0 })
         );
         emit BeaconChain___Withdraw(pubkey, amount);
     }
@@ -247,7 +247,7 @@ contract BeaconChain {
         }
 
         // Ensure only the owner can request withdrawal
-        if (validator.owner != msg.sender) {
+        if (validator.owner != pendingWithdrawal.owner) {
             emit BeaconChain___WithdrawNotProcessed(pubkey, "Only owner can request withdrawal");
             return;
         }
@@ -277,6 +277,7 @@ contract BeaconChain {
             // Only mark the validator as EXITED, actual withdrawal will be processed in sweep
             validator.status = Status.EXITED;
             emit BeaconChain___StatusChanged(pubkey, validator.amount, Status.ACTIVE, Status.EXITED);
+            return;
         }
 
         // This should never happen, but just in case, to avoid useless fuzz calls
