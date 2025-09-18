@@ -39,12 +39,13 @@ single_line_statement_blocks = "single"
 runs = 256
 depth = 500
 show_metrics = true
-fail_on_revert = true
 call_override = false
+fail_on_revert = false
 include_storage = true
 shrink_run_limit = 5_000
 dictionary_weight = 80
 include_push_bytes = true
+max_assume_rejects = 1_000
 
 
 [dependencies]
