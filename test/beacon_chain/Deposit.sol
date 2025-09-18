@@ -271,7 +271,7 @@ contract Deposit_Test is Setup {
         beaconChain.getDepositQueue();
 
         // Deactivate validator
-        beaconChain.deactivateValidator();
+        beaconChain.deactivateValidators();
 
         // Process sweep
         beaconChain.processSweep();
