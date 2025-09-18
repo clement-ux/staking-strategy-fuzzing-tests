@@ -23,6 +23,16 @@ import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 // Utils
 import { ValidatorSet } from "../src/ValidatorSet.sol";
 
+/// @title Setup
+/// @notice Abstract contract responsible for test environment initialization and contract deployment.
+/// @dev    This contract orchestrates the complete test setup process in a structured manner:
+///         1. Environment configuration (block timestamp, number)
+///         2. User address generation and role assignment
+///         3. External contract deployment (mocks, dependencies)
+///         4. Main contract deployment
+///         5. System initialization and configuration
+///         6. Address labeling for improved traceability
+///         No test logic should be implemented here, only setup procedures.
 contract Setup is Base, ValidatorSet {
     ////////////////////////////////////////////////////
     /// --- SETUP
