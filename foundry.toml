@@ -50,7 +50,7 @@ include_push_bytes = true
 forge-std = "1.9.7"
 solmate = "6.8.0"
 solady = "0.1.23"
-"origin-dollar" = { version = "1.0.0", git = "git@github.com:OriginProtocol/origin-dollar.git", rev = "ba180065b4f4a8cd847f7af11bf51ad815413d90" }
+"origin-dollar" = { version = "1.0.0", git = "git@github.com:OriginProtocol/origin-dollar.git", rev = "546c47f2a2fa91acc2c72466476a149163dfa99b" }
 "openzeppelin-contracts-4.4.2" = { version = "4.4.2", git = "git@github.com:OpenZeppelin/openzeppelin-contracts.git", rev = "b53c43242fc9c0e435b66178c3847c4a1b417cc1" }
 
 
