@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 // Test imports
 import { Setup } from "test/Setup.sol";
+import { FuzzerBase } from "test/FuzzerBase.sol";
 
 // Helpers
 import { console } from "@forge-std/console.sol";
@@ -16,7 +17,7 @@ import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeSta
 /// @title TargetFunctions
 /// @notice TargetFunctions contract for tests, containing the target functions that should be tested.
 ///         This is the entry point with the contract we are testing. Ideally, it should never revert.
-abstract contract TargetFunctions is Setup {
+abstract contract TargetFunctions is Setup, FuzzerBase {
     // ╔══════════════════════════════════════════════════════════════════════════════╗
     // ║                           ✦✦✦ TARGET FUNCTIONS ✦✦✦                           ║
     // ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -47,10 +48,6 @@ abstract contract TargetFunctions is Setup {
     using LibString for string;
     using SafeCastLib for uint256;
 
-    bytes[] public registeredSSVValidators;
-
-    uint256 public constant MAX_DEPOSITS = 12;
-
     function setUp() public virtual override {
         super.setUp();
     }
@@ -62,6 +59,7 @@ abstract contract TargetFunctions is Setup {
     /// @notice Simulate a deposit on the strategy from the vault.
     /// @param amount Amount of ETH to deposit, limited to uint80 because strategy can only process 48 validators at a time.
     /// This represents 48 * 2048 ETH = 98304 ETH max. uint72 ≈ 4.7k ETH which is too low, so using: uint80 ≈ 1.2M ETH.
+    // forge-lint: disable-next-line(mixed-case-function)
     function handler_deposit(
         uint80 amount
     ) public {
@@ -82,6 +80,7 @@ abstract contract TargetFunctions is Setup {
     /// @notice Register a SSV validator.
     /// @param index Index of the validator to register, limited to uint8 because strategy can only process 48 validators at
     /// a time. uint8 ≈ 255, so this is more than enough for 48 validators.
+    // forge-lint: disable-next-line(mixed-case-function)
     function handler_registerSsvValidator(
         uint8 index
     ) public {
@@ -112,7 +111,7 @@ abstract contract TargetFunctions is Setup {
         strategy.registerSsvValidator(pubkey, new uint64[](0), bytes(""), 0, emptyCluster);
 
         // Keep track of the registered validator.
-        registeredSSVValidators.push(pubkey);
+        registeredSsvValidators.push(pubkey);
 
         // Log the registration.
         console.log("RegisterSsvValidator(): \t\t", vm.toString(pubkey).slice(0, 5));
@@ -125,6 +124,7 @@ abstract contract TargetFunctions is Setup {
     /// However, we will cap the amount to 3k ETH to avoid weird scenarios where we try to stake too much ETH at once.
     /// @param index Index in the list of registered SSV validators to use for the staking, limited to uint8 because, we
     /// should have more than 255 ssv validators registered, really low risk of overflow.
+    // forge-lint: disable-next-line(mixed-case-function)
     function handler_stakeEth(uint48 amountInGwei, uint8 index) public {
         // Bound the amount to stake to a maximum of 3k ETH.
         uint256 balanceInGwei = weth.balanceOf(address(strategy)) / 1 gwei;
@@ -132,11 +132,11 @@ abstract contract TargetFunctions is Setup {
         // Some assertions to ensure the staking can be done.
         vm.assume(balanceInGwei >= 1 gwei); // Ensure there is at least 1 gwei to stake.
         vm.assume(!strategy.firstDeposit()); // Ensure not 2 deposits for 2 different validators that are not verified.
-        vm.assume(registeredSSVValidators.length > 0); // Ensure there is at least 1 registered SSV validator.
+        vm.assume(registeredSsvValidators.length > 0); // Ensure there is at least 1 registered SSV validator.
         vm.assume(strategy.depositListLength() < MAX_DEPOSITS); // Ensure we don't exceed max deposits.
 
         // Pick a random registered SSV validator in the list of registered SSV validators.
-        bytes memory pubkey = registeredSSVValidators[index % registeredSSVValidators.length.toUint8()];
+        bytes memory pubkey = registeredSsvValidators[index % registeredSsvValidators.length.toUint8()];
 
         // If validator is REGISTERED, deposit should be exactly 1 ETH.
         bytes32 pubkeyHash = beaconProofs.hashPubKey(pubkey);
@@ -172,9 +172,5 @@ abstract contract TargetFunctions is Setup {
 
         // Log the staking.
         console.log("StakeEth(): \t\t\t\t%18e", amountInWei, "ETH to:", vm.toString(pubkey).slice(0, 5));
-    }
-
-    function min(uint256 a, uint256 b) private pure returns (uint256) {
-        return a < b ? a : b;
     }
 }
