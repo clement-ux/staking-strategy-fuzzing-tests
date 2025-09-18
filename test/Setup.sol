@@ -7,12 +7,12 @@ import { Base } from "./Base.sol";
 // Contract to test
 import { InitializableAbstractStrategy } from "@origin-dollar/utils/InitializableAbstractStrategy.sol";
 import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+import { CompoundingStakingStrategyView } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingView.sol";
 import { CompoundingStakingSSVStrategyProxy } from "@origin-dollar/proxies/Proxies.sol";
 
 // Mocks
-import { WETH } from "@solmate/tokens/WETH.sol";
-import { ERC20 } from "@solmate/tokens/ERC20.sol";
-import { MockERC20 } from "@solmate/test/utils/mocks/MockERC20.sol";
+import { MockWETH } from "../src/mock/MockWETH.sol";
+import { MockERC20 } from "../src/mock/MockERC20.sol";
 import { SSVNetwork } from "../src/SSVNetwork.sol";
 import { BeaconRoot } from "../src/BeaconRoot.sol";
 import { BeaconChain } from "../src/BeaconChain.sol";
@@ -73,6 +73,7 @@ contract Setup is Base, ValidatorSet {
 
         // Then deploy BeaconProofs contract
         beaconProofs = new BeaconProofs(address(beaconChain));
+        beaconChain.setBeaconProofs(address(beaconProofs));
 
         // Deploy DepositContract and PartialWithdrawContract to their respective addresses on mainnet
         deployCodeTo("BeaconRoot.sol", abi.encode(), BEACON_ROOTS_ADDRESS);
@@ -90,8 +91,8 @@ contract Setup is Base, ValidatorSet {
         deal(address(beaconChain.REWARD_DISTRIBUTOR()), 1_000_000 ether);
 
         // Deploy WETH and SSV token
-        ssv = ERC20(address(new MockERC20("SSV Token", "SSV", 18)));
-        weth = new WETH();
+        ssv = new MockERC20("SSV Token", "SSV", 18);
+        weth = new MockWETH();
     }
 
     //////////////////////////////////////////////////////
@@ -132,6 +133,10 @@ contract Setup is Base, ValidatorSet {
         // Set logic contract on proxy
         strategy = CompoundingStakingSSVStrategy(payable(address(strategyProxy)));
 
+        // ---
+        // --- 4. Deploy view contract. ---
+        strategyView = new CompoundingStakingStrategyView(address(strategy));
+
         vm.stopPrank();
     }
 
@@ -152,6 +157,7 @@ contract Setup is Base, ValidatorSet {
         // Strategy
         vm.label(address(strategy), "CompoundingStakingSSVStrategy");
         vm.label(address(strategyProxy), "CompoundingStakingSSVStrategy Proxy");
+        vm.label(address(strategyView), "CompoundingStakingSSVStrategy View");
 
         // Mocks
         vm.label(address(beaconRoot), "BeaconRoot");

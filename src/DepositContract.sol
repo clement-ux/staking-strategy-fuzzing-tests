@@ -9,6 +9,9 @@ contract DepositContract {
     ////////////////////////////////////////////////////
     BeaconChain public beaconChain;
 
+    /// @notice Unique counter for deposits, starting at 100 to avoid confusion with 0
+    uint256 public uniqueDepositId = 100;
+
     ////////////////////////////////////////////////////
     /// --- CONSTRUCTOR
     ////////////////////////////////////////////////////
@@ -29,6 +32,7 @@ contract DepositContract {
         bytes memory signature,
         bytes32 depositDataRoot
     ) external payable {
+        uniqueDepositId++;
         beaconChain.deposit{ value: msg.value }(pubkey, withdrawalCredentials, signature, depositDataRoot);
     }
 }

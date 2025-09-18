@@ -35,7 +35,8 @@ contract BeaconProofs is ValidatorSet {
         bytes calldata signature,
         uint64 slot
     ) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(pubKeyHash, withdrawalCredentials, amountGwei, signature, slot));
+        slot; // to silence solc warning about unused variable
+        return keccak256(abi.encodePacked(pubKeyHash, withdrawalCredentials, amountGwei, signature));
     }
 
     /// @notice Verify that a validator with the given index and withdrawal address corresponds to the given pubKeyHash
@@ -81,18 +82,33 @@ contract BeaconProofs is ValidatorSet {
         revert("Beacon Proofs: Validator not found");
     }
 
+    /// @notice Check if the Deposit Queue is empty
+    /// @dev for the sake of simplicity, we assume the deposit queue is always empty. As this is only used in the
+    /// `verifyDeposit` function, we return true to bypass the last check, as we are only checking that the deposit as been
+    /// processed and this check is performed with `verifyValidatorWithdrawable`.
     function verifyFirstPendingDeposit(
         bytes32, /*beaconBlockRoot*/
-        bytes32, /*pendingDepositRoot*/
-        bytes memory /*pendingDepositProof*/
-    ) public pure returns (bool) { }
+        uint64, /*slot*/
+        bytes calldata /*firstPendingDepositSlotProof*/
+    ) public pure returns (bool) {
+        return true;
+    }
 
+    /// @notice In theory check if the validator is withdrawable
+    /// For the sake of the fuzz test; this will check that the deposit has been processed
+    /// @param withdrawableEpochProof is used to pass the unique deposit identifier
     function verifyValidatorWithdrawable(
         bytes32, /*beaconBlockRoot*/
         uint40, /*validatorIndex*/
         uint64, /*withdrawableEpoch*/
-        bytes memory /*withdrawableEpochProof*/
-    ) public pure { }
+        bytes memory withdrawableEpochProof
+    ) public view {
+        // 1. Convert withdrawableEpochProof to bytes32 deposit udid
+        bytes32 udid = bytes32(withdrawableEpochProof);
+
+        // 2. Check that the deposit has been processed
+        require(beaconChain.processedDeposits(udid), "Beacon Proofs: Deposit not yet processed or doesn't exist");
+    }
 
     function verifyBalancesContainer(
         bytes32, /*beaconBlockRoot*/

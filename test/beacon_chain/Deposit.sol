@@ -1,103 +1,88 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { console } from "@forge-std/console.sol";
 import { Setup } from "../Setup.sol";
+import { BeaconChain } from "../../src/BeaconChain.sol";
+import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+import { CompoundingStakingStrategyView } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingView.sol";
 
 contract Deposit_Test is Setup {
+    bytes nullBytes32 = aliceWithdrawalCredentials;
+    bytes aliceWithdrawalCredentials = abi.encodePacked(bytes1(0x02), bytes11(0), address(alice));
+
     function setUp() public virtual override {
         super.setUp();
     }
 
     function test_Deposit() public {
-        uint256 depositAmount = 1 ether;
+        // Register a validator on SSV
+        vm.prank(operator);
+        strategy.registerSsvValidator(validator1.pubkey, new uint64[](0), bytes(""), 0, emptyCluster);
 
-        // Deposit
-        vm.startPrank(alice);
-        beaconChain.deposit{ value: depositAmount * 10 }(VALIDATOR_1, "", "", "");
-        beaconChain.deposit{ value: depositAmount * 22 }(VALIDATOR_1, "", "", "");
-        beaconChain.deposit{ value: depositAmount * 12 }(VALIDATOR_2, "", "", "");
-
-        // Check deposit queue
-        beaconChain.getDepositQueue();
-
-        // Process deposits
-        beaconChain.processDeposit(0);
-        beaconChain.processDeposit(0);
-
-        // Check validator state
-        checkValidatorState();
-
-        // Activate validator 1
-        beaconChain.getValidatorLength();
-        beaconChain.activateValidator(0);
-        beaconChain.getValidatorLength();
-
-        // Check validator state
-        checkValidatorState();
-
-        // Withdraw from validator 1
-        beaconChain.withdraw(VALIDATOR_1, depositAmount * 5);
-        beaconChain.processWithdraw(0);
-
-        // Check validator state
-        checkValidatorState();
-
-        // Withdraw more than remaining balance
-        beaconChain.withdraw(VALIDATOR_1, depositAmount * 18);
-        beaconChain.processWithdraw(0);
-
-        // Check validator state
-        checkValidatorState();
-
-        // Process exit
-        beaconChain.processExit(0);
-
-        // Check validator state
-        checkValidatorState();
-
-        // Sweep
-        beaconChain.processSweep();
-
-        // Check validator state
-        checkValidatorState();
-
-        // Deposit more to validator 2
-        beaconChain.deposit{ value: depositAmount * 2035 }(VALIDATOR_2, "", "", "");
-        checkValidatorState();
-
-        beaconChain.processDeposit(0);
-        beaconChain.processDeposit(0);
-        beaconChain.activateValidator(0);
-
-        // Check validator state
-        checkValidatorState();
-
-        // Simulate some rewards on validator 2
-        beaconChain.simulateRewards(VALIDATOR_2, 2 ether);
-
-        // Check validator state
-        checkValidatorState();
-
-        // Process sweep
-        beaconChain.processSweep();
-
-        // Check validator state
-        checkValidatorState();
-
-        // Slash validator 2 by 2040 ether
-        beaconChain.slash(VALIDATOR_2, 2040 ether);
-
-        beaconChain.processExit(0);
-        beaconChain.processSweep();
-
+        // Stake 1 ETH
+        weth.mint(address(strategy), 1 ether);
+        vm.startPrank(operator);
+        strategy.stakeEth({
+            validatorStakeData: CompoundingValidatorManager.ValidatorStakeData({
+                pubkey: validator1.pubkey,
+                signature: abi.encodePacked(depositContract.uniqueDepositId()),
+                depositDataRoot: bytes32(0)
+            }),
+            depositAmountGwei: 1 ether / 1 gwei
+        });
         vm.stopPrank();
-    }
 
-    function checkValidatorState() public view {
-        //beaconChain.getDepositQueue();
-        //beaconChain.getPendingQueue();
-        //beaconChain.getWithdrawQueue();
-        //beaconChain.getExitQueue();
+        // Verify validator
+        strategy.verifyValidator(0, validator1.index, hashPubKey(validator1.pubkey), address(strategy), bytes(""));
+
+        // Process deposit on BeaconChain
+        beaconChain.processDeposit();
+
+        // Verify deposit
+        CompoundingStakingStrategyView.DepositView[] memory deposits = strategyView.getPendingDeposits();
+        strategy.verifyDeposit({
+            pendingDepositRoot: deposits[0].pendingDepositRoot,
+            depositProcessedSlot: deposits[0].slot + 1,
+            firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
+            strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
+                withdrawableEpoch: type(uint64).max,
+                withdrawableEpochProof: abi.encodePacked(deposits[0].pendingDepositRoot)
+            })
+        });
+
+        // Check state
         beaconChain.getValidators();
+        beaconChain.getDepositQueue();
+        beaconChain.getWithdrawQueue();
+
+        // Stake 31 ETH
+        weth.mint(address(strategy), 31 ether);
+        vm.startPrank(operator);
+        strategy.stakeEth({
+            validatorStakeData: CompoundingValidatorManager.ValidatorStakeData({
+                pubkey: validator1.pubkey,
+                signature: abi.encodePacked(depositContract.uniqueDepositId()),
+                depositDataRoot: bytes32(0)
+            }),
+            depositAmountGwei: 31 ether / 1 gwei
+        });
+        vm.stopPrank();
+
+        // Process deposit on BeaconChain
+        beaconChain.processDeposit();
+
+        // Verify deposit
+        console.log("Second deposit verification");
+        deposits = strategyView.getPendingDeposits();
+        strategy.verifyDeposit({
+            pendingDepositRoot: deposits[0].pendingDepositRoot,
+            depositProcessedSlot: deposits[0].slot + 1,
+            firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
+            strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
+                withdrawableEpoch: type(uint64).max,
+                withdrawableEpochProof: abi.encodePacked(deposits[0].pendingDepositRoot)
+            })
+        });
     }
 }
