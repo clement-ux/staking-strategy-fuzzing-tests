@@ -21,6 +21,12 @@ import { DepositContract } from "../src/DepositContract.sol";
 import { RewardDistributor } from "../src/RewardDistributor.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 
+/// @title Base
+/// @notice Abstract base contract defining shared state variables and contract instances for the test suite.
+/// @dev    This contract serves as the foundation for all test contracts, providing:
+///         - Contract instances (tokens, external dependencies)
+///         - Address definitions (users, governance, deployers)
+///         - No logic or setup should be included here, only state variable declarations
 contract Base is Test {
     ////////////////////////////////////////////////////
     /// --- CONSTANTS & IMMUTABLES
