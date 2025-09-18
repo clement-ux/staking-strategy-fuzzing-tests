@@ -45,9 +45,9 @@ contract BeaconProofs is ValidatorSet {
     /// 2. Ensure the withdrawal address matches the credentials, reading from the deposit queue or the active validators in
     /// the BeaconChain.
     function verifyValidator(
-        bytes32, /*beaconBlockRoot*/
+        bytes32,
         bytes32 pubKeyHash,
-        bytes memory, /*proof*/
+        bytes memory,
         uint40 validatorIndex,
         address withdrawalAddress
     ) public view {
@@ -86,23 +86,14 @@ contract BeaconProofs is ValidatorSet {
     /// @dev for the sake of simplicity, we assume the deposit queue is always empty. As this is only used in the
     /// `verifyDeposit` function, we return true to bypass the last check, as we are only checking that the deposit as been
     /// processed and this check is performed with `verifyValidatorWithdrawable`.
-    function verifyFirstPendingDeposit(
-        bytes32, /*beaconBlockRoot*/
-        uint64, /*slot*/
-        bytes calldata /*firstPendingDepositSlotProof*/
-    ) public pure returns (bool) {
+    function verifyFirstPendingDeposit(bytes32, uint64, bytes calldata) public pure returns (bool) {
         return true;
     }
 
     /// @notice In theory check if the validator is withdrawable
     /// For the sake of the fuzz test; this will check that the deposit has been processed
     /// @param withdrawableEpochProof is used to pass the unique deposit identifier
-    function verifyValidatorWithdrawable(
-        bytes32, /*beaconBlockRoot*/
-        uint40, /*validatorIndex*/
-        uint64, /*withdrawableEpoch*/
-        bytes memory withdrawableEpochProof
-    ) public view {
+    function verifyValidatorWithdrawable(bytes32, uint40, uint64, bytes memory withdrawableEpochProof) public view {
         // 1. Convert withdrawableEpochProof to bytes32 deposit udid
         bytes32 udid = bytes32(withdrawableEpochProof);
 
@@ -114,21 +105,10 @@ contract BeaconProofs is ValidatorSet {
     }
 
     /// @notice As this is just a call to this function, we do not need to verify anything
-    function verifyBalancesContainer(
-        bytes32, /*beaconBlockRoot*/
-        bytes32, /*balancesContainerRoot*/
-        bytes memory /*balancesContainerProof*/
-    ) public pure { }
+    function verifyBalancesContainer(bytes32, bytes32, bytes memory) public pure { }
 
-    function verifyValidatorBalance(
-        bytes32 balancesContainerRoot,
-        bytes32 validatorBalanceLeaf,
-        bytes calldata balanceProof,
-        uint40 validatorIndex
-    ) public view returns (uint256) {
-        balancesContainerRoot; // to silence solc warning about unused variable
-        validatorBalanceLeaf; // to silence solc warning about unused variable
-        balanceProof; // to silence solc warning about unused variable
+    /// @notice Get the balance of the validator from the BeaconChain contract
+    function verifyValidatorBalance(bytes32, bytes32, bytes calldata, uint40 validatorIndex) public view returns (uint256) {
         // Get the validator pubkey from the index
         bytes memory pubkey = indexToPubkey[validatorIndex];
 
@@ -146,11 +126,7 @@ contract BeaconProofs is ValidatorSet {
     }
 
     /// @notice As this is just a call to this function, we do not need to verify anything
-    function verifyPendingDepositsContainer(
-        bytes32, /*beaconBlockRoot*/
-        bytes32, /*pendingDepositsContainerRoot*/
-        bytes memory /*pendingDepositsContainerProof*/
-    ) public pure { }
+    function verifyPendingDepositsContainer(bytes32, bytes32, bytes memory) public pure { }
 
     /// @notice Check that the pending deposit is still pending
     function verifyPendingDeposit(bytes32, bytes32 pendingDepositRoot, bytes calldata, uint32) public view {
