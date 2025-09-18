@@ -10,6 +10,11 @@ contract ValidatorSet {
     using SafeCastLib for uint256;
 
     ////////////////////////////////////////////////////
+    /// --- CONSTANTS & IMMUTABLES
+    ////////////////////////////////////////////////////
+    uint256 public constant MAX_VALIDATORS = 21;
+
+    ////////////////////////////////////////////////////
     /// --- STRUCTS & ENUMS
     ////////////////////////////////////////////////////
     struct Validator {
@@ -48,7 +53,8 @@ contract ValidatorSet {
         Validator(13, hex"00dfffffffffffffffffffffffffffffffffffffffffff00dffffffffffffffffffffffffffffffffffffffffffff00d");
     Validator public validator14 =
         Validator(14, hex"00efffffffffffffffffffffffffffffffffffffffffff00efffffffffffffffffffffffffffffffffffffffffff00ef");
-    // Validator public validator15 ; // has been removed to due to the "f" in the middle.
+    Validator public validator15 =
+        Validator(15, hex"00ffffffffffffffffffffffffffffffffffffffffffff00fffffffffffffffffffffffffffffffffffffffffffff00f");
     Validator public validator16 =
         Validator(16, hex"010fffffffffffffffffffffffffffffffffffffffffff010ffffffffffffffffffffffffffffffffffffffffffff010");
     Validator public validator17 =
@@ -64,9 +70,9 @@ contract ValidatorSet {
 
     Validator[] public validators;
 
+    mapping(bytes pubkey => bytes32) public pubkeyToHash;
     mapping(bytes pubkey => uint40 index) public pubkeyToIndex;
     mapping(uint40 index => bytes pubkey) public indexToPubkey;
-    mapping(bytes pubkey => bytes32) public pubkeyToHash;
     mapping(bytes32 pubkeyHash => bytes pubkey) public hashToPubkey;
 
     ////////////////////////////////////////////////////
@@ -87,7 +93,7 @@ contract ValidatorSet {
         validators.push(validator12);
         validators.push(validator13);
         validators.push(validator14);
-        // validators.push(validator15);
+        validators.push(validator15);
         validators.push(validator16);
         validators.push(validator17);
         validators.push(validator18);
