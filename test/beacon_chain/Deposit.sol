@@ -50,5 +50,39 @@ contract Deposit_Test is Setup {
                 withdrawableEpochProof: abi.encodePacked(deposits[0].pendingDepositRoot)
             })
         });
+
+        // Check state
+        beaconChain.getValidators();
+        beaconChain.getDepositQueue();
+        beaconChain.getWithdrawQueue();
+
+        // Stake 31 ETH
+        weth.mint(address(strategy), 31 ether);
+        vm.startPrank(operator);
+        strategy.stakeEth({
+            validatorStakeData: CompoundingValidatorManager.ValidatorStakeData({
+                pubkey: validator1.pubkey,
+                signature: abi.encodePacked(depositContract.uniqueDepositId()),
+                depositDataRoot: bytes32(0)
+            }),
+            depositAmountGwei: 31 ether / 1 gwei
+        });
+        vm.stopPrank();
+
+        // Process deposit on BeaconChain
+        beaconChain.processDeposit();
+
+        // Verify deposit
+        console.log("Second deposit verification");
+        deposits = strategyView.getPendingDeposits();
+        strategy.verifyDeposit({
+            pendingDepositRoot: deposits[0].pendingDepositRoot,
+            depositProcessedSlot: deposits[0].slot + 1,
+            firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
+            strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
+                withdrawableEpoch: type(uint64).max,
+                withdrawableEpochProof: abi.encodePacked(deposits[0].pendingDepositRoot)
+            })
+        });
     }
 }
