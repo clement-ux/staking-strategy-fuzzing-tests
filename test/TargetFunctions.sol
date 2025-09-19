@@ -271,4 +271,17 @@ abstract contract TargetFunctions is FuzzerBase {
             string("remain: ").concat(vm.toString(deposits.length - 1))
         );
     }
+
+    /// @notice Activate validator in the beacon chain.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_activateValidators() public {
+        // Activate the first validator that can be activated.
+        bytes memory pubkey = beaconChain.activateValidator();
+
+        // Ensure at least one validator was activated.
+        vm.assume(!pubkey.eq(abi.encodePacked(NOT_FOUND)));
+
+        // Log the activation.
+        console.log("ActivateValidators(): \t\t", logPubkey(pubkey));
+    }
 }
