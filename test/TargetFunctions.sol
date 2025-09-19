@@ -10,6 +10,9 @@ import { LibBytes } from "@solady/utils/LibBytes.sol";
 import { LibString } from "@solady/utils/LibString.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
 
+// Beacon
+import { BeaconChain } from "src/BeaconChain.sol";
+
 // Target contracts
 import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
 
@@ -22,7 +25,7 @@ abstract contract TargetFunctions is FuzzerBase {
     // ╚══════════════════════════════════════════════════════════════════════════════╝
     //
     // --- BeaconChain
-    // [ ] processDeposit
+    // [x] processDeposit
     // [ ] processWithdraw
     // [ ] activateValidators
     // [ ] deactivateValidators
@@ -39,7 +42,7 @@ abstract contract TargetFunctions is FuzzerBase {
     // [x] stakeEth
     // [ ] validatorWithdrawal
     // [x] verifyValidator
-    // [ ] verifyDeposit
+    // [x] verifyDeposit
     // [ ] snapBalances
     // [ ] verifyBalances
     //
@@ -54,21 +57,11 @@ abstract contract TargetFunctions is FuzzerBase {
         super.setUp();
 
         // Gives a little boost at the start, to get more relevant situations right away:
-
-        // 1. Make an initial deposit of 100 ETH.
-        // Mint WETH directly to the strategy to simulate the vault having sent it.
-        weth.mint(address(strategy), 100 ether);
-        vm.prank(oethVault);
-        strategy.deposit(address(weth), 100 ether);
-
-        // 2. Register a first SSV validator.
-        vm.prank(operator);
-        strategy.registerSsvValidator(validator1.pubkey, new uint64[](0), bytes(""), 0, emptyCluster);
     }
 
-    // ╔══════════════════════════════════════════════════════════════════════════════╗
-    // ║                          ✦✦✦ STRATEGY HANDLERS ✦✦✦                           ║
-    // ╚══════════════════════════════════════════════════════════════════════════════╝
+    ////////////////////////////////////////////////////
+    /// --- STRATEGY HANDLERS
+    ////////////////////////////////////////////////////
 
     /// @notice Simulate a deposit on the strategy from the vault.
     /// @param amount Amount of ETH to deposit, limited to uint80 because strategy can only process 48 validators at a time.
@@ -164,6 +157,14 @@ abstract contract TargetFunctions is FuzzerBase {
             amountInGwei = 1 gwei;
         }
 
+        bytes32 pendingDepositRoot = beaconProofs.merkleizePendingDeposit(
+            hashPubKey(pubkey),
+            abi.encodePacked(bytes1(0x02), bytes11(0), address(strategy)), // withdrawal credentials
+            uint64(amountInGwei),
+            abi.encodePacked(depositContract.uniqueDepositId()), // signature
+            0 // slot
+        );
+
         // Main call: stakeEth
         vm.startPrank(operator);
         strategy.stakeEth({
@@ -177,7 +178,11 @@ abstract contract TargetFunctions is FuzzerBase {
         vm.stopPrank();
 
         // Log the staking.
-        console.log("StakeEth(): \t\t\t\t%18e", uint256(amountInGwei) * 1 gwei, "ETH to:", logPubkey(pubkey));
+        console.log(
+            "StakeEth(): \t\t\t\t%18e",
+            uint256(amountInGwei) * 1 gwei,
+            string("ETH to:").concat(logPubkey(pubkey)).concat(" udid: ").concat(logUdid(pendingDepositRoot))
+        );
     }
 
     /// @notice Verify a validator.
@@ -206,5 +211,64 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // Log the verification.
         console.log("VerifyValidator(): \t\t\t", logPubkey(pubkey));
+    }
+
+    /// @notice Verify a deposit.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_verifyDeposit(
+        uint8 index
+    ) public {
+        // Pick a random deposit that have PENDING status
+        // + is linked to a validator with either VERIFIED, ACTIVE or EXITED
+        // + the deposit must be PROCESSED in the beacon chain.
+        CompoundingValidatorManager.ValidatorState[] memory validStates = new CompoundingValidatorManager.ValidatorState[](3);
+        validStates[0] = CompoundingValidatorManager.ValidatorState.VERIFIED;
+        validStates[1] = CompoundingValidatorManager.ValidatorState.ACTIVE;
+        validStates[2] = CompoundingValidatorManager.ValidatorState.EXITED;
+
+        (bytes32 pendingDepositRoot, bytes32 pubKeyHash, uint64 slot) = depositAndValidatorWithStatus(
+            ExpectedStatus({
+                beaconDepositStatus: BeaconChain.DepositStatus.PROCESSED,
+                strategyDepositStatus: CompoundingValidatorManager.DepositStatus.PENDING,
+                validatorStatusArr: validStates
+            }),
+            index
+        );
+        // If no deposit match the criteria, skip the verification.
+        if (pendingDepositRoot == bytes32(abi.encodePacked(NOT_FOUND))) {
+            logAssume(false, "VerifyDeposit(): \t\t all deposits are already verified");
+        }
+
+        // Main call: verifyDeposit
+        strategy.verifyDeposit({
+            pendingDepositRoot: pendingDepositRoot,
+            depositProcessedSlot: slot + 1,
+            firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
+            strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
+                withdrawableEpoch: type(uint64).max,
+                withdrawableEpochProof: abi.encodePacked(pendingDepositRoot)
+            })
+        });
+
+        // Log the verification.
+        console.log("VerifyDeposit(): \t\t\t", logPubkey(hashToPubkey[pubKeyHash]), " - udid: ", logUdid(pendingDepositRoot));
+    }
+
+    ////////////////////////////////////////////////////
+    /// --- BEACONCHAIN HANDLERS
+    ////////////////////////////////////////////////////
+    /// @notice Process a single deposit in the beacon chain.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_processDeposit() public {
+        BeaconChain.Queue[] memory deposits = beaconChain.getDepositQueue();
+        vm.assume(deposits.length > 0); // Ensure there is at least one deposit to process.
+
+        beaconChain.processDeposit();
+
+        console.log(
+            "ProcessDeposit(): \t\t\t",
+            logUdid(deposits[0].udid),
+            string("remain: ").concat(vm.toString(deposits.length - 1))
+        );
     }
 }

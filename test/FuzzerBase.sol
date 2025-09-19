@@ -9,6 +9,7 @@ import { console } from "@forge-std/console.sol";
 import { LibString } from "@solady/utils/LibString.sol";
 
 // Target contracts
+import { BeaconChain } from "src/BeaconChain.sol";
 import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
 
 /// @title FuzzerBase
@@ -56,6 +57,9 @@ abstract contract FuzzerBase is Setup {
         array.pop();
     }
 
+    ////////////////////////////////////////////////////
+    /// --- FIND VALIDATORS
+    ////////////////////////////////////////////////////
     /// @notice Finds a validator with a specific status starting from a given index.
     /// @param status The desired validator status to search for.
     /// @param index The starting index for the search.
@@ -145,6 +149,132 @@ abstract contract FuzzerBase is Setup {
         return (abi.encodePacked(NOT_FOUND), CompoundingValidatorManager.ValidatorState.NON_REGISTERED);
     }
 
+    ////////////////////////////////////////////////////
+    /// --- FIND DEPOSITS
+    ////////////////////////////////////////////////////
+    /// @notice Finds a deposit with a specific status starting from a given index.
+    /// @param status The desired deposit status to search for.
+    /// @param index The starting index for the search.
+    /// @return The root of the found deposit, or NOT_FOUND if none match.
+    function depositWithStatus(
+        CompoundingValidatorManager.DepositStatus status,
+        uint256 index
+    ) public view returns (bytes32) {
+        uint256 len = strategy.depositListLength();
+
+        for (uint256 i = index; i < len + index; i++) {
+            bytes32 pendingDepositRoot = strategy.depositList(i % len);
+            (,,,, CompoundingValidatorManager.DepositStatus currentStatus) = strategy.deposits(pendingDepositRoot);
+            if (currentStatus == status) return pendingDepositRoot;
+        }
+
+        return (bytes32(abi.encodePacked(NOT_FOUND)));
+    }
+
+    /// @notice Finds a deposit and its associated validator with specific statuses starting from a given index.
+    /// @param depositStatus The desired deposit status to search for.
+    /// @param validatorStatus The desired validator status to search for.
+    /// @param index The starting index for the search.
+    /// @return The root of the found deposit and the public key hash of the associated validator, or NOT_FOUND if none
+    /// match.
+    function depositAndValidatorWithStatus(
+        CompoundingValidatorManager.DepositStatus depositStatus,
+        CompoundingValidatorManager.ValidatorState validatorStatus,
+        uint256 index
+    ) public view returns (bytes32, bytes32) {
+        uint256 len = strategy.depositListLength();
+
+        for (uint256 i = index; i < len + index; i++) {
+            bytes32 pendingDepositRoot = strategy.depositList(i % len);
+
+            // Fetch current status of the deposit
+            (bytes32 pubKeyHash,,,, CompoundingValidatorManager.DepositStatus currentStrategyDepositStatus) =
+                strategy.deposits(pendingDepositRoot);
+
+            // Fetch current status of the validator
+            (CompoundingValidatorManager.ValidatorState currentValidatorStatus,) = strategy.validator(pubKeyHash);
+
+            if (currentStrategyDepositStatus == depositStatus && currentValidatorStatus == validatorStatus) {
+                return (pendingDepositRoot, pubKeyHash);
+            }
+        }
+
+        return (bytes32(abi.encodePacked(NOT_FOUND)), bytes32(abi.encodePacked(NOT_FOUND)));
+    }
+
+    struct ExpectedStatus {
+        // Expected deposit status in the beacon chain
+        BeaconChain.DepositStatus beaconDepositStatus;
+        // Expected deposit status in the strategy
+        CompoundingValidatorManager.DepositStatus strategyDepositStatus;
+        // Array of acceptable validator statuses in the strategy
+        CompoundingValidatorManager.ValidatorState[] validatorStatusArr;
+    }
+
+    /// @notice Finds a deposit and its associated validator matching expected statuses starting from a given index.
+    /// @param expectedStatus The expected statuses for the deposit and validator.
+    /// @param index The starting index for the search.
+    /// @return The root of the found deposit, the public key hash of the associated validator, and the slot of the deposit,
+    /// or NOT_FOUND if none match.
+    function depositAndValidatorWithStatus(
+        ExpectedStatus memory expectedStatus,
+        uint256 index
+    ) public view returns (bytes32, bytes32, uint64) {
+        uint256 len = strategy.depositListLength();
+
+        for (uint256 i = index; i < len + index; i++) {
+            bytes32 pendingDepositRoot = strategy.depositList(i % len);
+
+            (bool success, bytes32 pubKeyHash, uint64 slot) = areStatusCorrect(expectedStatus, pendingDepositRoot);
+            if (success) return (pendingDepositRoot, pubKeyHash, slot);
+        }
+
+        return (bytes32(abi.encodePacked(NOT_FOUND)), bytes32(abi.encodePacked(NOT_FOUND)), 0);
+    }
+
+    function areStatusCorrect(
+        ExpectedStatus memory expectedStatus,
+        bytes32 pendingDepositRoot
+    ) public view returns (bool, bytes32, uint64) {
+        // Fetch current status of the deposit in the beacon chain
+        BeaconChain.DepositStatus currentBeaconDepositStatus = beaconChain.processedDeposits(pendingDepositRoot);
+
+        // Fetch current status of the deposit in the strategy
+        (bytes32 pubKeyHash,, uint64 slot,, CompoundingValidatorManager.DepositStatus currentStrategyDepositStatus) =
+            strategy.deposits(pendingDepositRoot);
+
+        // Fetch current status of the validator in the strategy
+        (CompoundingValidatorManager.ValidatorState currentStrategyValidatorStatus,) = strategy.validator(pubKeyHash);
+
+        // Check if all statuses match the expected ones
+        // forgefmt: disable-start
+            // forgefmt: disable-end
+        return (
+            currentBeaconDepositStatus == expectedStatus.beaconDepositStatus
+                && currentStrategyDepositStatus == expectedStatus.strategyDepositStatus
+                && matchAtLeastOne(currentStrategyValidatorStatus, expectedStatus.validatorStatusArr),
+            pubKeyHash,
+            slot
+        );
+    }
+
+    /// @notice Checks if a given validator status matches at least one status in an array.
+    /// @param status The validator status to check.
+    /// @param statusArr The array of validator statuses to match against.
+    /// @return True if the status matches at least one in the array, false otherwise.
+    function matchAtLeastOne(
+        CompoundingValidatorManager.ValidatorState status,
+        CompoundingValidatorManager.ValidatorState[] memory statusArr
+    ) public pure returns (bool) {
+        for (uint256 i = 0; i < statusArr.length; i++) {
+            if (status == statusArr[i]) return true;
+        }
+        return false;
+    }
+
+    ////////////////////////////////////////////////////
+    /// --- LOGGER
+    ////////////////////////////////////////////////////
     /// @notice Logs a message if a condition is false, then assumes the condition is true for fuzzing.
     /// @param condition The condition to check.
     /// @param message The message to log if the condition is false.
@@ -159,5 +289,11 @@ abstract contract FuzzerBase is Setup {
         bytes memory pubkey
     ) public pure returns (string memory) {
         return vm.toString(pubkey).slice(0, 5);
+    }
+
+    function logUdid(
+        bytes32 udid
+    ) public pure returns (string memory) {
+        return vm.toString(udid).slice(0, 6);
     }
 }
