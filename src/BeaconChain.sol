@@ -316,6 +316,20 @@ contract BeaconChain {
         }
     }
 
+    /// @notice Goes through all validators and activates the first one that is `DEPOSITED` and has enough ETH.
+    function activateValidator() public returns (bytes memory) {
+        uint256 len = validators.length;
+        for (uint256 i; i < len; i++) {
+            Validator storage validator = validators[i];
+            if (validator.status == Status.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
+                validator.status = Status.ACTIVE;
+                emit BeaconChain___StatusChanged(validator.pubkey, validator.amount, Status.DEPOSITED, Status.ACTIVE);
+                return validator.pubkey;
+            }
+        }
+        return bytes(abi.encodePacked(NOT_FOUND)); // No validator activated
+    }
+
     /// @notice Goes through all validators and change status from EXITED to WITHDRAWABLE.
     /// @dev This function is used to simulate the exit delay, but does not enforce any time-based logic.
     function deactivateValidators(
