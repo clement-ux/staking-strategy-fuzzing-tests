@@ -2,7 +2,6 @@
 pragma solidity 0.8.29;
 
 // Test imports
-import { Setup } from "test/Setup.sol";
 import { FuzzerBase } from "test/FuzzerBase.sol";
 
 // Helpers
@@ -17,7 +16,7 @@ import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeSta
 /// @title TargetFunctions
 /// @notice TargetFunctions contract for tests, containing the target functions that should be tested.
 ///         This is the entry point with the contract we are testing. Ideally, it should never revert.
-abstract contract TargetFunctions is Setup, FuzzerBase {
+abstract contract TargetFunctions is FuzzerBase {
     // ╔══════════════════════════════════════════════════════════════════════════════╗
     // ║                           ✦✦✦ TARGET FUNCTIONS ✦✦✦                           ║
     // ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -65,7 +64,6 @@ abstract contract TargetFunctions is Setup, FuzzerBase {
         // 2. Register a first SSV validator.
         vm.prank(operator);
         strategy.registerSsvValidator(validator1.pubkey, new uint64[](0), bytes(""), 0, emptyCluster);
-        registeredSsvValidators.push(validator1.pubkey);
     }
 
     // ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -103,41 +101,26 @@ abstract contract TargetFunctions is Setup, FuzzerBase {
     /// @notice Register a SSV validator.
     /// @param index Index of the validator to register, limited to uint8 because strategy can only process 48 validators at
     /// a time. uint8 ≈ 255, so this is more than enough for 48 validators.
+    /// @dev Reduce probability of this function being successfully called to 40% to avoid having too many registered. As
+    /// this function is easy to pass (because low amount of assume), it tends to be called a lot more than other handlers,
+    /// which results in having too many registered validators and no other calls.
     // forge-lint: disable-next-line(mixed-case-function)
     function handler_registerSsvValidator(
         uint8 index
-    ) public {
-        // Bound the index of the validator to register.
-        index = _bound(index, 1, MAX_VALIDATORS).toUint8();
-
-        bytes memory pubkey;
-        // Ensure the validator is not already registered, if it is, try the next one, until we find one that is not
-        // registered.
-        for (uint256 i; i < MAX_VALIDATORS; i++) {
-            uint256 currentIndex = ((index - 1 + i) % MAX_VALIDATORS) + 1;
-            bytes memory _pubkey = indexToPubkey[currentIndex.toUint40()];
-            if (!beaconChain.ssvRegisteredValidators(_pubkey)) {
-                pubkey = _pubkey;
-                break;
-            }
-        }
+    ) public probability(index, 40) {
+        // Pick a random validator that have NOT_REGISTERED status.
+        bytes memory pubkey = validatorWithStatus(CompoundingValidatorManager.ValidatorState.NON_REGISTERED, index);
         // If all validators are already registered, skip the registration.
-        if (pubkey.eq(bytes(""))) {
-            // All validators are already registered.
-            console.log("RegisterSsvValidator(): \t\t all validators are already registered");
-            vm.assume(false);
-            return;
+        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+            logAssume(false, "RegisterSsvValidator(): \t\t all validators are already registered");
         }
 
         // Main call: registerSsvValidator
         vm.prank(operator);
         strategy.registerSsvValidator(pubkey, new uint64[](0), bytes(""), 0, emptyCluster);
 
-        // Keep track of the registered validator.
-        registeredSsvValidators.push(pubkey);
-
         // Log the registration.
-        console.log("RegisterSsvValidator(): \t\t", vm.toString(pubkey).slice(0, 5));
+        console.log("RegisterSsvValidator(): \t\t", logPubkey(pubkey));
     }
 
     /// @notice Stake ETH.
@@ -155,33 +138,30 @@ abstract contract TargetFunctions is Setup, FuzzerBase {
         // Some assertions to ensure the staking can be done.
         vm.assume(balanceInGwei >= 1 gwei); // Ensure there is at least 1 gwei to stake.
         vm.assume(!strategy.firstDeposit()); // Ensure not 2 deposits for 2 different validators that are not verified.
-        vm.assume(registeredSsvValidators.length > 0); // Ensure there is at least 1 registered SSV validator.
         vm.assume(strategy.depositListLength() < MAX_DEPOSITS); // Ensure we don't exceed max deposits.
 
-        // Pick a random registered SSV validator in the list of registered SSV validators.
-        bytes memory pubkey = registeredSsvValidators[index % registeredSsvValidators.length.toUint8()];
+        // Pick a random validator that have either REGISTERED, VERIFIED or ACTIVE status.
+        (bytes memory pubkey, CompoundingValidatorManager.ValidatorState status) = validatorWithStatus(
+            CompoundingValidatorManager.ValidatorState.REGISTERED,
+            CompoundingValidatorManager.ValidatorState.VERIFIED,
+            CompoundingValidatorManager.ValidatorState.ACTIVE,
+            index
+        );
+        // If no validator match the criteria, skip the staking.
+        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+            logAssume(false, "StakeEth(): \t\t\t\t all validators are already staked");
+        }
+
+        // Bound the amount to stake between 1 ether and the minimum of 3k ether or the strategy balance.
+        amountInGwei = _bound(amountInGwei, 1 gwei, min(3000 gwei, balanceInGwei)).toUint48();
 
         // If validator is REGISTERED, deposit should be exactly 1 ETH.
-        bytes32 pubkeyHash = beaconProofs.hashPubKey(pubkey);
-        (CompoundingValidatorManager.ValidatorState status,) = strategy.validator(pubkeyHash);
-        vm.assume(
-            status == CompoundingValidatorManager.ValidatorState.REGISTERED
-                || status == CompoundingValidatorManager.ValidatorState.VERIFIED
-                || status == CompoundingValidatorManager.ValidatorState.ACTIVE
-        );
-
-        amountInGwei = _bound(amountInGwei, 1 gwei, min(3000 gwei, balanceInGwei)).toUint48();
-        uint256 amountInWei = uint256(amountInGwei) * 1e9;
         if (status == CompoundingValidatorManager.ValidatorState.REGISTERED) {
             // Ensure we don't exceed max verified validators.
             vm.assume(strategy.verifiedValidatorsLength() + 1 < MAX_VERIFIED_VALIDATORS);
 
-            // Mark the validator as staked.
-            stakedValidators.push(pubkey);
-
             // Convert amountInGwei to exactly 1 gwei.
             amountInGwei = 1 gwei;
-            amountInWei = 1 ether;
         }
 
         // Main call: stakeEth
@@ -197,24 +177,23 @@ abstract contract TargetFunctions is Setup, FuzzerBase {
         vm.stopPrank();
 
         // Log the staking.
-        console.log("StakeEth(): \t\t\t\t%18e", amountInWei, "ETH to:", vm.toString(pubkey).slice(0, 5));
+        console.log("StakeEth(): \t\t\t\t%18e", uint256(amountInGwei) * 1 gwei, "ETH to:", logPubkey(pubkey));
     }
 
     /// @notice Verify a validator.
     /// @param index Index in the list of staked validators to verify, limited to uint8 because we shouldn't have more than
     /// 255 ssv validators registered, really low risk of overflow.
+    // forge-lint: disable-next-line(mixed-case-function)
     function handler_verifyValidator(
         uint8 index
     ) public {
-        vm.assume(stakedValidators.length > 0); // Ensure there is at least 1 staked validator.
-
-        index = index % stakedValidators.length.toUint8();
-        bytes memory pubkey = stakedValidators[index];
-        bytes32 pubkeyHash = pubkeyToHash[pubkey];
-
-        // Check status of the validator.
-        (CompoundingValidatorManager.ValidatorState status,) = strategy.validator(pubkeyHash);
-        require(status == CompoundingValidatorManager.ValidatorState.STAKED, "Validator should not be in this list");
+        // Pick a random validator that have STAKED status.
+        bytes memory pubkey = validatorWithStatus(CompoundingValidatorManager.ValidatorState.STAKED, index);
+        // If no validator match the criteria, skip the verification.
+        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+            logAssume(false, "VerifyValidator(): \t\t all validators are already verified");
+        }
+        bytes32 pubkeyHash = hashPubKey(pubkey);
 
         // Main call: verifyValidator
         strategy.verifyValidator({
@@ -225,13 +204,7 @@ abstract contract TargetFunctions is Setup, FuzzerBase {
             validatorPubKeyProof: bytes("")
         });
 
-        // Remove the validator from the list of staked validators.
-        removeFromArray(stakedValidators, index);
-
-        // Mark the validator as verified.
-        verifiedValidators.push(pubkey);
-
         // Log the verification.
-        console.log("VerifyValidator(): \t\t\t", vm.toString(pubkey).slice(0, 5));
+        console.log("VerifyValidator(): \t\t\t", logPubkey(pubkey));
     }
 }
