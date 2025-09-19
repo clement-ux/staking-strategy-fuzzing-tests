@@ -14,7 +14,9 @@ contract Deposit_Test is Setup {
         super.setUp();
     }
 
-    function test_Deposit() public {
+    // Badly named to avoid forge test auto-discovery
+    // forge-lint: disable-next-line(mixed-case-function)
+    function tes_Deposit() public {
         // Register a validator on SSV
         vm.prank(operator);
         strategy.registerSsvValidator(validator1.pubkey, new uint64[](0), bytes(""), 0, emptyCluster);
