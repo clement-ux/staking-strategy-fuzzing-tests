@@ -46,6 +46,11 @@ abstract contract TargetFunctions is FuzzerBase {
     // [ ] snapBalances
     // [ ] verifyBalances
     //
+    // --- System
+    // [x] timejump
+    //
+    // ------------------------
+
     using LibBytes for bytes;
     using LibString for string;
     using SafeCastLib for uint256;
@@ -92,15 +97,15 @@ abstract contract TargetFunctions is FuzzerBase {
     }
 
     /// @notice Register a SSV validator.
+    /// @param random Random value used to reduce the probability of this function being called. Not limited because used for
+    /// randomness.
     /// @param index Index of the validator to register, limited to uint8 because strategy can only process 48 validators at
     /// a time. uint8 ≈ 255, so this is more than enough for 48 validators.
     /// @dev Reduce probability of this function being successfully called to 40% to avoid having too many registered. As
     /// this function is easy to pass (because low amount of assume), it tends to be called a lot more than other handlers,
     /// which results in having too many registered validators and no other calls.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_registerSsvValidator(
-        uint8 index
-    ) public probability(index, 40) {
+    function handler_registerSsvValidator(uint256 random, uint8 index) public probability(random, 40) {
         // Pick a random validator that have NOT_REGISTERED status.
         bytes memory pubkey = validatorWithStatus(CompoundingValidatorManager.ValidatorState.NON_REGISTERED, index);
         // If all validators are already registered, skip the registration.
@@ -239,10 +244,13 @@ abstract contract TargetFunctions is FuzzerBase {
             logAssume(false, "VerifyDeposit(): \t\t all deposits are already verified");
         }
 
+        (, uint64 snapTimestamp,) = strategy.snappedBalance();
+        uint64 depositProcessedSlot = slot + 1;
+        vm.assume(snapTimestamp == 0 || calcNextBlockTimestamp(depositProcessedSlot) <= snapTimestamp);
         // Main call: verifyDeposit
         strategy.verifyDeposit({
             pendingDepositRoot: pendingDepositRoot,
-            depositProcessedSlot: slot + 1,
+            depositProcessedSlot: depositProcessedSlot,
             firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
             strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
                 withdrawableEpoch: type(uint64).max,
@@ -252,6 +260,24 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // Log the verification.
         console.log("VerifyDeposit(): \t\t\t", logPubkey(hashToPubkey[pubKeyHash]), " - udid: ", logUdid(pendingDepositRoot));
+    }
+
+    /// @notice Snap the balances of the strategy.
+    /// @param random Index used to reduce the probability of this function being called, no limit because used for
+    /// randomness.
+    function handler_snapBalances(
+        uint256 random
+    ) public probability(random, 20) {
+        (, uint64 snapTimestamp,) = strategy.snappedBalance();
+
+        // Prevent calling snapBalances too often.
+        vm.assume(snapTimestamp + SNAP_BALANCES_DELAY < block.timestamp);
+
+        // Main call: snapBalances
+        strategy.snapBalances();
+
+        // Log the snap.
+        console.log("SnapBalances(): \t\t\ttimestamp:", block.timestamp);
     }
 
     ////////////////////////////////////////////////////
@@ -283,5 +309,21 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // Log the activation.
         console.log("ActivateValidators(): \t\t", logPubkey(pubkey));
+    }
+
+    ////////////////////////////////////////////////////
+    /// --- SYSTEM HANDLERS
+    ////////////////////////////////////////////////////
+    /// @notice Simulate a time jump in the system.
+    /// @param random Index used to reduce the probability of this function being called. Not limited because used for
+    /// randomness.
+    /// @param secondsToJump Number of seconds to jump, limited to uint32 to avoid too big jumps.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_timejump(uint256 random, uint32 secondsToJump) public probability(random, 10) {
+        // Minimum jump of 12 seconds to ensure we replicate execution block time.
+        secondsToJump = _bound(secondsToJump, 12, 1 days).toUint32();
+        skip(secondsToJump);
+
+        console.log("Timejump(): \t\t\t\t jumped %d seconds to %d", secondsToJump, block.timestamp);
     }
 }

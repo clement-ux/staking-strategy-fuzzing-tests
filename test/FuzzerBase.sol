@@ -22,8 +22,11 @@ abstract contract FuzzerBase is Setup {
     ////////////////////////////////////////////////////
     /// --- CONSTANTS & IMMUTABLES
     ////////////////////////////////////////////////////
+    uint64 public constant SLOT_DURATION = 12; // seconds
+
     uint256 public constant NOT_FOUND = type(uint256).max;
     uint256 public constant MAX_DEPOSITS = 12;
+    uint256 public constant SNAP_BALANCES_DELAY = 35 * 12; // ~35 slots, i.e. ~7 minutes
 
     ////////////////////////////////////////////////////
     /// --- STORAGE
@@ -55,6 +58,15 @@ abstract contract FuzzerBase is Setup {
         require(index < array.length, "Index out of bounds");
         array[index] = array[array.length - 1];
         array.pop();
+    }
+
+    /// @dev Calculates the timestamp of the next execution block from the given slot.
+    /// @param slot The beacon chain slot number used for merkle proof verification.
+    function calcNextBlockTimestamp(
+        uint64 slot
+    ) public pure returns (uint64) {
+        // Calculate the next block timestamp from the slot.
+        return SLOT_DURATION * slot + GENESIS_TIMESTAMP + SLOT_DURATION;
     }
 
     ////////////////////////////////////////////////////
