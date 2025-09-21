@@ -159,6 +159,55 @@ abstract contract FuzzerBase is Setup {
         return (abi.encodePacked(NOT_FOUND), CompoundingValidatorManager.ValidatorState.NON_REGISTERED);
     }
 
+    function pleaseFindBetterName(
+        bool fullWithdraw,
+        uint256 index
+    ) public view returns (bytes memory, CompoundingValidatorManager.ValidatorState) {
+        Validator[] memory _validators = validators;
+
+        uint256 len = _validators.length;
+        // Browse through all possible validators, find one that matches the criteria
+        for (uint256 i = index; i < len + index; i++) {
+            // Get the pubkey of the validator to check
+            bytes memory pubkey = _validators[i % len].pubkey;
+
+            // Fetch status from strategy
+            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkeyToHash[pubkey]);
+
+            // We only want ACTIVE or EXITING validators
+            if (
+                currentStatus != CompoundingValidatorManager.ValidatorState.ACTIVE
+                    && currentStatus != CompoundingValidatorManager.ValidatorState.EXITING
+            ) continue;
+
+            // If we want to do a partial withdrawal, don't need to ensure there is no pending deposits.
+            if (!fullWithdraw) return (pubkey, currentStatus);
+
+            // If we want to do a full withdrawal, ensure there is no pending deposits.
+            uint256 pendingDeposits = strategy.depositListLength();
+            bool hasPendingDeposit = false;
+            // It should be quick as there is maximum 12 deposits.
+            for (uint256 j; j < pendingDeposits; j++) {
+                // Get pending deposit root
+                bytes32 pendingDepositRoot = strategy.depositList(j);
+
+                // Get the validator pubkey corresponding to the pending deposit
+                (bytes32 pubKeyHash,,,,) = strategy.deposits(pendingDepositRoot);
+
+                // If there is a pending deposit for this validator, skip it.
+                if (pubKeyHash == pubkeyToHash[pubkey]) {
+                    hasPendingDeposit = true;
+                    break;
+                }
+            }
+
+            if (!hasPendingDeposit) return (pubkey, currentStatus);
+        }
+
+        // If no validator found, return NOT_FOUND
+        return (abi.encodePacked(NOT_FOUND), CompoundingValidatorManager.ValidatorState.NON_REGISTERED);
+    }
+
     /// @notice Finds a validator having one of the three specific statuses starting from a given index.
     /// @param status1 The first desired validator status to search for.
     /// @param status2 The second desired validator status to search for.

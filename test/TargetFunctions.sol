@@ -294,11 +294,11 @@ abstract contract TargetFunctions is FuzzerBase {
         // strategy.
         // This is a temporary fix, as I assume this will not works once we will implement withdraw (especially with deposit
         // to an exited validator. This assume that only the strategy can process deposits.
-        vm.assume(strategy.depositListLength() == beaconChain.getDepositQueueLength());
+        uint256 pendingDeposits = strategy.depositListLength();
+        vm.assume(pendingDeposits == beaconChain.getDepositQueueLength());
 
         // Get sizes for arrays.
         uint256 validValidators = strategy.verifiedValidatorsLength();
-        uint256 pendingDeposits = strategy.depositListLength();
 
         // Main call: verifyBalances
         strategy.verifyBalances({
@@ -318,6 +318,35 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // Log the verification.
         console.log("VerifyBalances(): \t\t\t%18e ETH", strategy.lastVerifiedEthBalance());
+    }
+
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_validatorWithdrawal(bool fullWithdraw, uint48 amountToWithdraw, uint8 index) public {
+        // Bound the amount to withdraw between 1 gwei and 3k ETH.
+        amountToWithdraw = fullWithdraw ? 0 : _bound(amountToWithdraw, 1, 3000 gwei).toUint48();
+
+        // Pick a random validator that have either ACTIVE or EXITING status.
+        // If the validator is EXITING and fullWithdraw requested, ensure there is no pending deposit.
+        (bytes memory pubkey,) = pleaseFindBetterName(fullWithdraw, index);
+
+        // If no validator match the criteria, skip the withdrawal.
+        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+            logAssume(
+                false, "ValidatorWithdrawal(): \t all validators are either not active or exiting with pending deposits"
+            );
+        }
+
+        // Main call: validatorWithdrawal
+        vm.prank(operator);
+        strategy.validatorWithdrawal({ publicKey: pubkey, amountGwei: amountToWithdraw });
+
+        // Log the withdrawal.
+        console.log(
+            "ValidatorWithdrawal(): \t\t",
+            fullWithdraw ? "full" : string("partial %18e ETH").concat(vm.toString(uint256(amountToWithdraw) * 1 gwei)),
+            " from: ",
+            logPubkey(pubkey)
+        );
     }
 
     ////////////////////////////////////////////////////
@@ -367,3 +396,4 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log("Timejump(): \t\t\t\t jumped %d seconds to %d", secondsToJump, block.timestamp);
     }
 }
+//3000.000000000 gwei

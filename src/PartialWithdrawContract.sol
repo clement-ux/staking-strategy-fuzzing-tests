@@ -52,7 +52,7 @@ contract PartialWithdrawContract {
             amount := shr(shift, uint64Word)
         }
 
-        beaconChain.withdraw(pubkey, amount * 1 gwei, msg.sender);
+        beaconChain.withdraw(pubkey, uint256(amount) * 1 gwei, msg.sender);
         return "";
     }
 }
