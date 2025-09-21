@@ -27,7 +27,7 @@ abstract contract TargetFunctions is FuzzerBase {
     // --- BeaconChain
     // [x] processDeposit
     // [ ] processWithdraw
-    // [ ] activateValidators
+    // [x] activateValidators
     // [ ] deactivateValidators
     // [ ] processSweep
     // [ ] simulateRewards
@@ -44,7 +44,7 @@ abstract contract TargetFunctions is FuzzerBase {
     // [x] verifyValidator
     // [x] verifyDeposit
     // [x] snapBalances
-    // [ ] verifyBalances
+    // [x] verifyBalances
     //
     // --- System
     // [x] timejump
@@ -282,11 +282,19 @@ abstract contract TargetFunctions is FuzzerBase {
     }
 
     /// @notice Verify the balances of the strategy.
+    /// @dev Currently, it's hard to pass this call, because it requires the BeaconChain to have to same deposit queue as the
+    /// strategy i.e. that no deposit have been processed on the beacon chain without being verified on the strategy.
     // forge-lint: disable-next-line(mixed-case-function)
     function handler_verifyBalances() public {
         // Ensure snapBalances was called at least once.
         (, uint64 snapTimestamp,) = strategy.snappedBalance();
         vm.assume(snapTimestamp != 0);
+
+        // It is only possible to verifyBalances if there is a deposit processed on beacon chain, but not verifier on the
+        // strategy.
+        // This is a temporary fix, as I assume this will not works once we will implement withdraw (especially with deposit
+        // to an exited validator. This assume that only the strategy can process deposits.
+        vm.assume(strategy.depositListLength() == beaconChain.getDepositQueueLength());
 
         // Get sizes for arrays.
         uint256 validValidators = strategy.verifiedValidatorsLength();
@@ -309,7 +317,7 @@ abstract contract TargetFunctions is FuzzerBase {
         });
 
         // Log the verification.
-        console.log("VerifyBalances(): \t\t", strategy.lastVerifiedEthBalance());
+        console.log("VerifyBalances(): \t\t\t%18e ETH", strategy.lastVerifiedEthBalance());
     }
 
     ////////////////////////////////////////////////////
