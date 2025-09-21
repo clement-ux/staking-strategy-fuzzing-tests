@@ -43,7 +43,7 @@ abstract contract TargetFunctions is FuzzerBase {
     // [ ] validatorWithdrawal
     // [x] verifyValidator
     // [x] verifyDeposit
-    // [ ] snapBalances
+    // [x] snapBalances
     // [ ] verifyBalances
     //
     // --- System
@@ -198,7 +198,7 @@ abstract contract TargetFunctions is FuzzerBase {
         uint8 index
     ) public {
         // Pick a random validator that have STAKED status.
-        bytes memory pubkey = validatorWithStatus(CompoundingValidatorManager.ValidatorState.STAKED, index);
+        bytes memory pubkey = existingValidatorWithStatus(CompoundingValidatorManager.ValidatorState.STAKED, index);
         // If no validator match the criteria, skip the verification.
         if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
             logAssume(false, "VerifyValidator(): \t\t all validators are already verified");
@@ -265,6 +265,7 @@ abstract contract TargetFunctions is FuzzerBase {
     /// @notice Snap the balances of the strategy.
     /// @param random Index used to reduce the probability of this function being called, no limit because used for
     /// randomness.
+    // forge-lint: disable-next-line(mixed-case-function)
     function handler_snapBalances(
         uint256 random
     ) public probability(random, 20) {
@@ -278,6 +279,37 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // Log the snap.
         console.log("SnapBalances(): \t\t\ttimestamp:", block.timestamp);
+    }
+
+    /// @notice Verify the balances of the strategy.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_verifyBalances() public {
+        // Ensure snapBalances was called at least once.
+        (, uint64 snapTimestamp,) = strategy.snappedBalance();
+        vm.assume(snapTimestamp != 0);
+
+        // Get sizes for arrays.
+        uint256 validValidators = strategy.verifiedValidatorsLength();
+        uint256 pendingDeposits = strategy.depositListLength();
+
+        // Main call: verifyBalances
+        strategy.verifyBalances({
+            balanceProofs: CompoundingValidatorManager.BalanceProofs({
+                balancesContainerRoot: bytes32(0),
+                balancesContainerProof: bytes(""),
+                validatorBalanceLeaves: new bytes32[](validValidators),
+                validatorBalanceProofs: new bytes[](validValidators)
+            }),
+            pendingDepositProofs: CompoundingValidatorManager.PendingDepositProofs({
+                pendingDepositContainerRoot: bytes32(0),
+                pendingDepositContainerProof: bytes(""),
+                pendingDepositIndexes: new uint32[](pendingDeposits),
+                pendingDepositProofs: new bytes[](pendingDeposits)
+            })
+        });
+
+        // Log the verification.
+        console.log("VerifyBalances(): \t\t", strategy.lastVerifiedEthBalance());
     }
 
     ////////////////////////////////////////////////////

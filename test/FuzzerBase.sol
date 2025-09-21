@@ -99,6 +99,37 @@ abstract contract FuzzerBase is Setup {
         return abi.encodePacked(NOT_FOUND);
     }
 
+    /// @notice Finds an existing validator (i.e., registered on the beacon chain) with a specific status starting from a
+    /// given index.
+    /// @param status The desired validator status to search for.
+    /// @param index The starting index for the search.
+    /// @return The public key of the found validator, or NOT_FOUND if none match.
+    function existingValidatorWithStatus(
+        CompoundingValidatorManager.ValidatorState status,
+        uint256 index
+    ) public view returns (bytes memory) {
+        Validator[] memory _validators = validators;
+
+        uint256 len = _validators.length;
+        // Browse through all possible validators, find one that matches the criteria
+        for (uint256 i = index; i < len + index; i++) {
+            // Get the pubkey of the validator to check
+            bytes memory pubkey = _validators[i % len].pubkey;
+
+            // Fetch status from strategy
+            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkeyToHash[pubkey]);
+
+            // Get validator status from beacon chain
+            uint256 beaconIndex = beaconChain.getValidatorIndex(pubkey);
+
+            // If status matches, return the pubkey
+            if (currentStatus == status && beaconIndex != NOT_FOUND) return pubkey;
+        }
+
+        // If no validator found, return NOT_FOUND
+        return abi.encodePacked(NOT_FOUND);
+    }
+
     /// @notice Finds a validator having one of the two specific statuses starting from a given index.
     /// @param status1 The first desired validator status to search for.
     /// @param status2 The second desired validator status to search for.

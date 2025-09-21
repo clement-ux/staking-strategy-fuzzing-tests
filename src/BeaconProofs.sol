@@ -58,21 +58,9 @@ contract BeaconProofs is ValidatorSet {
         require(pubkeyToIndex[pubkey] == validatorIndex, "Beacon Proofs: Invalid validator index");
 
         // Second, ensure the withdrawal address matches the credentials
-        // The deposit can be either in the depositQueue or already deposited
-        //1. Browse the deposit queue
-        BeaconChain.Queue[] memory depositQueue = beaconChain.getDepositQueue();
-        uint256 len = depositQueue.length;
-        for (uint256 i = 0; i < len; i++) {
-            if (depositQueue[i].pubkey.eq(pubkey)) {
-                require(
-                    depositQueue[i].owner == withdrawalAddress, "Beacon Proofs: Invalid withdrawal address (deposit queue)"
-                );
-                return;
-            }
-        }
-        // 2. Browse the active validators
+        // Browse the active validators
         BeaconChain.Validator[] memory validator = beaconChain.getValidators();
-        len = validator.length;
+        uint256 len = validator.length;
         for (uint256 i = 0; i < len; i++) {
             if (validator[i].pubkey.eq(pubkey)) {
                 require(validator[i].owner == withdrawalAddress, "Beacon Proofs: Invalid withdrawal address (active)");
