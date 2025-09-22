@@ -29,7 +29,7 @@ abstract contract TargetFunctions is FuzzerBase {
     // [ ] processWithdraw
     // [x] activateValidators
     // [ ] deactivateValidators
-    // [ ] processSweep
+    // [x] processSweep
     // [ ] simulateRewards
     // [ ] slash
     //
@@ -407,10 +407,10 @@ abstract contract TargetFunctions is FuzzerBase {
     /// @notice Remove a SSV validator.
     /// @param index Index in the list of registered SSV validators to remove, limited to uint8 because we should have
     /// more than 255 ssv validators registered, really low risk of overflow.
+    /// @param random Random value used to reduce the probability of this function being called. Not limited because used for
+    /// randomness.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_removeSsvValidator(
-        uint8 index
-    ) public {
+    function handler_removeSsvValidator(uint8 index, uint256 random) public probability(random, 20) {
         // Pick a random validator that have either REGISTERED, EXITED or INVALID status.
         (bytes memory pubkey,) = validatorWithStatus(
             CompoundingValidatorManager.ValidatorState.REGISTERED,
@@ -429,6 +429,25 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log("RemoveSsvValidator(): \t\t", logPubkey(pubkey));
     }
 
+    /// @notice Process a sweep of validators in the beacon chain.
+    /// @param count Maximum number of validators to process in this sweep, limited to uint8 because we should not have
+    /// more than 255 validators, really low risk of overflow.
+    /// @param index Start index in the list of validators to start the sweep from, limited to uint8 because we should not
+    /// have more than 255 validators, really low risk of overflow.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_processSweep(uint8 count, uint8 index) public {
+        uint256 validatorsCount = beaconChain.getValidatorLength();
+        vm.assume(validatorsCount > 0); // Ensure there is at least one validator to process.
+
+        // Bound the count to process between 1 and the number of validators.
+        count = _bound(count, 1, uint8(validatorsCount)).toUint8();
+
+        // Main call: processSweep
+        uint256 len = beaconChain.processSweep(count, index);
+
+        console.log("ProcessSweep(): \t\t\t processed %d validators (%d total)", len, validatorsCount);
+    }
+
     ////////////////////////////////////////////////////
     /// --- SYSTEM HANDLERS
     ////////////////////////////////////////////////////
@@ -445,4 +464,3 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log("Timejump(): \t\t\t\t jumped %d seconds to %d", secondsToJump, block.timestamp);
     }
 }
-//3000.000000000 gwei
