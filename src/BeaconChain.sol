@@ -368,8 +368,21 @@ contract BeaconChain {
     }
 
     /// @notice Desactivate all exited validators.
-    function deactivateValidators() public {
-        deactivateValidators(validators.length);
+    function deactivateValidators() public returns (bytes[] memory deactivatedPubkeys, uint256 counter) {
+        uint256 len = validators.length;
+
+        // Len is max size, will trim later if needed
+        deactivatedPubkeys = new bytes[](len);
+        for (uint256 i = 0; i < len; i++) {
+            if (validators[i].status == Status.EXITED) {
+                validators[i].status = Status.WITHDRAWABLE;
+                emit BeaconChain___StatusChanged(
+                    validators[i].pubkey, validators[i].amount, Status.EXITED, Status.WITHDRAWABLE
+                );
+                deactivatedPubkeys[counter] = validators[i].pubkey;
+                counter++;
+            }
+        }
     }
 
     /// @notice Get through all active validators and process if status is:
