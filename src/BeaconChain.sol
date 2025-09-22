@@ -459,8 +459,9 @@ contract BeaconChain {
     }
 
     /// @notice Browse through all active validators and simulate fixed percentage rewards.
-    function simulateRewards() public {
+    function simulateRewards() public returns (bytes[] memory receivers, uint256 counter, uint256 amount) {
         uint256 len = validators.length;
+        receivers = new bytes[](len);
         for (uint256 i = 0; i < len; i++) {
             Validator storage validator = validators[i];
             if (validator.status == Status.ACTIVE) {
@@ -469,10 +470,14 @@ contract BeaconChain {
 
                 // Increase the validator's amount by the reward
                 validator.amount += reward;
+                amount += reward;
 
                 // Distribute rewards using RewardDistributor
                 REWARD_DISTRIBUTOR.distributeRewards(address(this), reward);
                 emit BeaconChain___RewardsDistributed(validator.pubkey, reward);
+
+                receivers[counter] = validator.pubkey;
+                counter++;
             }
         }
     }

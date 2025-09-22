@@ -28,9 +28,9 @@ abstract contract TargetFunctions is FuzzerBase {
     // [x] processDeposit
     // [x] processWithdraw
     // [x] activateValidators
-    // [ ] deactivateValidators
+    // [x] deactivateValidators
     // [x] processSweep
-    // [ ] simulateRewards
+    // [x] simulateRewards
     // [ ] slash
     //
     // --- CompoundingStakingSSVStrategy
@@ -465,6 +465,8 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log("ProcessWithdraw(): \t\t\t%18e ETH pubkey: %s, udid: %s", amount, logPubkey(pubkey), logUdid(udid));
     }
 
+    /// @notice Deactivate validators in the beacon chain.
+    // forge-lint: disable-next-line(mixed-case-function)
     function handler_deactivateValidators() public {
         vm.assume(beaconChain.getValidatorLength() > 0); // Ensure there is at least one validator to process.
 
@@ -477,6 +479,20 @@ abstract contract TargetFunctions is FuzzerBase {
             "DeactivateValidators(): \t\t deactivated %d validators: %s",
             counter,
             arrayIntoString(deactivatedPubkeys, counter)
+        );
+    }
+
+    /// @notice Simulate rewards for active validators in the beacon chain.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_simulateRewards() public {
+        // Ensure there is at least one active validator.
+        vm.assume(countValidatorsWithStatus(CompoundingValidatorManager.ValidatorState.ACTIVE) > 0);
+
+        // Main call: simulateRewards
+        (bytes[] memory receivers, uint256 counter, uint256 amount) = beaconChain.simulateRewards();
+
+        console.log(
+            "SimulateRewards(): \t\t\t %18e ETH rewards distributed to: %s", amount, arrayIntoString(receivers, counter)
         );
     }
 
