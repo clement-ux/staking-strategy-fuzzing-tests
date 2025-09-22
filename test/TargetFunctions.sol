@@ -35,12 +35,12 @@ abstract contract TargetFunctions is FuzzerBase {
     //
     // --- CompoundingStakingSSVStrategy
     // [x] deposit
-    // [ ] withdraw
+    // [x] withdraw
     // [ ] checkBalance
     // [x] registerSsvValidator
     // [ ] removeSsvValidator
     // [x] stakeEth
-    // [ ] validatorWithdrawal
+    // [x] validatorWithdrawal
     // [x] verifyValidator
     // [x] verifyDeposit
     // [x] snapBalances
@@ -320,6 +320,12 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log("VerifyBalances(): \t\t\t%18e ETH", strategy.lastVerifiedEthBalance());
     }
 
+    /// @notice Withdraw from a validator.
+    /// @param fullWithdraw Whether to do a full withdraw (true) or a partial withdraw (false).
+    /// @param amountToWithdraw Amount of ETH to withdraw, in Gwei, limited to uint48 because maximum withdrawable amount
+    /// will be bound to 3000k ETH.
+    /// @param index Index in the list of registered SSV validators to use for the withdrawal, limited to uint8 because we
+    /// should have more than 255 ssv validators registered, really low risk of overflow.
     // forge-lint: disable-next-line(mixed-case-function)
     function handler_validatorWithdrawal(bool fullWithdraw, uint48 amountToWithdraw, uint8 index) public {
         // Bound the amount to withdraw between 1 gwei and 3k ETH.
@@ -347,6 +353,24 @@ abstract contract TargetFunctions is FuzzerBase {
             " from: ",
             logPubkey(pubkey)
         );
+    }
+
+    /// @notice Withdraw from the strategy to a recipient.
+    /// @param amount Amount of ETH to withdraw, limited to uint80 because it will be bound to the strategy balance.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_withdraw(uint80 amount, uint256 random) public probability(random, 20) {
+        uint256 balance = weth.balanceOf(address(strategy)) + address(strategy).balance;
+        vm.assume(balance > 1); // Ensure there is at least 1 wei to withdraw.
+
+        // Bound the amount to withdraw between 1 wei and the strategy balance.
+        amount = _bound(amount, 1, balance).toUint80();
+
+        // Main call: withdraw
+        vm.prank(oethVault);
+        strategy.withdraw(address(this), address(weth), amount);
+
+        // Log the withdrawal.
+        console.log("Withdraw():  \t\t\t\t%18e", amount, "ETH");
     }
 
     ////////////////////////////////////////////////////
