@@ -60,6 +60,20 @@ abstract contract FuzzerBase is Setup {
         array.pop();
     }
 
+    /// @notice Converts an array of bytes to a string representation.
+    /// @param array The array of bytes to convert.
+    /// @return A string representation of the array.
+    function arrayIntoString(bytes[] memory array, uint256 stopAt) public pure returns (string memory) {
+        if (array.length == 0) return "[]";
+        string memory result = "[";
+        for (uint256 i = 0; i < array.length && i < stopAt; i++) {
+            result = string.concat(result, logPubkey(array[i]));
+            if (i < array.length - 1 && i < stopAt - 1) result = string.concat(result, ", ");
+        }
+        result = string.concat(result, "]");
+        return result;
+    }
+
     /// @dev Calculates the timestamp of the next execution block from the given slot.
     /// @param slot The beacon chain slot number used for merkle proof verification.
     function calcNextBlockTimestamp(

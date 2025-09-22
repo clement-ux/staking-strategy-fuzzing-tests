@@ -434,10 +434,10 @@ abstract contract TargetFunctions is FuzzerBase {
     /// @notice Process a sweep of validators in the beacon chain.
     /// @param count Maximum number of validators to process in this sweep, limited to uint8 because we should not have
     /// more than 255 validators, really low risk of overflow.
-    /// @param index Start index in the list of validators to start the sweep from, limited to uint8 because we should not
-    /// have more than 255 validators, really low risk of overflow.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_processSweep(uint8 count, uint8 index) public {
+    function handler_processSweep(
+        uint8 count
+    ) public {
         uint256 validatorsCount = beaconChain.getValidatorLength();
         vm.assume(validatorsCount > 0); // Ensure there is at least one validator to process.
 
@@ -445,11 +445,13 @@ abstract contract TargetFunctions is FuzzerBase {
         count = _bound(count, 1, uint8(validatorsCount)).toUint8();
 
         // Main call: processSweep
-        uint256 len = beaconChain.processSweep(count, index);
+        beaconChain.processSweep();
 
-        console.log("ProcessSweep(): \t\t\t processed %d validators (%d total)", len, validatorsCount);
+        console.log("ProcessSweep(): \t\t\t (%d total)", validatorsCount);
     }
 
+    /// @notice Process a withdrawal in the beacon chain.
+    // forge-lint: disable-next-line(mixed-case-function)
     function handler_processWithdraw() public {
         vm.assume(beaconChain.getWithdrawQueueLength() > 0); // Ensure there is at least one withdraw to process.
 
@@ -461,6 +463,21 @@ abstract contract TargetFunctions is FuzzerBase {
         }
 
         console.log("ProcessWithdraw(): \t\t\t%18e ETH pubkey: %s, udid: %s", amount, logPubkey(pubkey), logUdid(udid));
+    }
+
+    function handler_deactivateValidators() public {
+        vm.assume(beaconChain.getValidatorLength() > 0); // Ensure there is at least one validator to process.
+
+        // Main call: deactivateValidators
+        (bytes[] memory deactivatedPubkeys, uint256 counter) = beaconChain.deactivateValidators();
+
+        vm.assume(counter > 0); // Ensure at least one validator was deactivated.
+
+        console.log(
+            "DeactivateValidators(): \t\t deactivated %d validators: %s",
+            counter,
+            arrayIntoString(deactivatedPubkeys, counter)
+        );
     }
 
     ////////////////////////////////////////////////////
