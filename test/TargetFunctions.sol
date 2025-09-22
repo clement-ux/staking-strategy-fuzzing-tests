@@ -38,7 +38,7 @@ abstract contract TargetFunctions is FuzzerBase {
     // [x] withdraw
     // [ ] checkBalance
     // [x] registerSsvValidator
-    // [ ] removeSsvValidator
+    // [x] removeSsvValidator
     // [x] stakeEth
     // [x] validatorWithdrawal
     // [x] verifyValidator
@@ -402,6 +402,31 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // Log the activation.
         console.log("ActivateValidators(): \t\t", logPubkey(pubkey));
+    }
+
+    /// @notice Remove a SSV validator.
+    /// @param index Index in the list of registered SSV validators to remove, limited to uint8 because we should have
+    /// more than 255 ssv validators registered, really low risk of overflow.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_removeSsvValidator(
+        uint8 index
+    ) public {
+        // Pick a random validator that have either REGISTERED, EXITED or INVALID status.
+        (bytes memory pubkey,) = validatorWithStatus(
+            CompoundingValidatorManager.ValidatorState.REGISTERED,
+            CompoundingValidatorManager.ValidatorState.EXITED,
+            CompoundingValidatorManager.ValidatorState.INVALID,
+            index
+        );
+        // If no validator match the criteria, skip the removal.
+        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) vm.assume(false);
+
+        // Main call: removeSsvValidator
+        vm.prank(operator);
+        strategy.removeSsvValidator(pubkey, new uint64[](0), emptyCluster);
+
+        // Log the removal.
+        console.log("RemoveSsvValidator(): \t\t", logPubkey(pubkey));
     }
 
     ////////////////////////////////////////////////////

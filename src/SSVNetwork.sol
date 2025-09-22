@@ -47,7 +47,7 @@ contract SSVNetwork {
         beaconChain.registerSsvValidator(publicKey);
     }
 
-    function removeSsvValidator(bytes memory publicKey, uint64[] memory, /*a*/ Cluster memory /*b*/ ) external {
+    function removeValidator(bytes memory publicKey, uint64[] memory, /*a*/ Cluster memory /*b*/ ) external {
         beaconChain.removeSsvValidator(publicKey);
     }
 }
