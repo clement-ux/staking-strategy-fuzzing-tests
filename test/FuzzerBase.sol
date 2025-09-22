@@ -113,28 +113,6 @@ abstract contract FuzzerBase is Setup {
         return abi.encodePacked(NOT_FOUND);
     }
 
-    /// @notice Counts the number of validators with a specific status.
-    /// @param status The desired validator status to count.
-    /// @return count The number of validators with the specified status.
-    function countValidatorsWithStatus(
-        CompoundingValidatorManager.ValidatorState status
-    ) public view returns (uint256 count) {
-        Validator[] memory _validators = validators;
-
-        uint256 len = _validators.length;
-        // Browse through all possible validators, find one that matches the criteria
-        for (uint256 i = 0; i < len; i++) {
-            // Get the pubkey of the validator to check
-            bytes memory pubkey = _validators[i].pubkey;
-
-            // Fetch status from strategy
-            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkeyToHash[pubkey]);
-
-            // If status matches, increment the count
-            if (currentStatus == status) count++;
-        }
-    }
-
     /// @notice Finds an existing validator (i.e., registered on the beacon chain) with a specific status starting from a
     /// given index.
     /// @param status The desired validator status to search for.

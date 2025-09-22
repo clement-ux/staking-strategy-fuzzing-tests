@@ -9,6 +9,7 @@ import { console } from "@forge-std/console.sol";
 import { LibBytes } from "@solady/utils/LibBytes.sol";
 import { LibString } from "@solady/utils/LibString.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
+import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
 
 // Beacon
 import { BeaconChain } from "src/BeaconChain.sol";
@@ -31,12 +32,11 @@ abstract contract TargetFunctions is FuzzerBase {
     // [x] deactivateValidators
     // [x] processSweep
     // [x] simulateRewards
-    // [ ] slash
+    // [x] slash
     //
     // --- CompoundingStakingSSVStrategy
     // [x] deposit
     // [x] withdraw
-    // [ ] checkBalance
     // [x] registerSsvValidator
     // [x] removeSsvValidator
     // [x] stakeEth
@@ -54,6 +54,7 @@ abstract contract TargetFunctions is FuzzerBase {
     using LibBytes for bytes;
     using LibString for string;
     using SafeCastLib for uint256;
+    using FixedPointMathLib for uint256;
 
     ////////////////////////////////////////////////////
     /// --- SETUP
@@ -486,7 +487,7 @@ abstract contract TargetFunctions is FuzzerBase {
     // forge-lint: disable-next-line(mixed-case-function)
     function handler_simulateRewards() public {
         // Ensure there is at least one active validator.
-        vm.assume(countValidatorsWithStatus(CompoundingValidatorManager.ValidatorState.ACTIVE) > 0);
+        vm.assume(beaconHelper.countValidatorWithStatus(BeaconChain.Status.ACTIVE) > 0);
 
         // Main call: simulateRewards
         (bytes[] memory receivers, uint256 counter, uint256 amount) = beaconChain.simulateRewards();
@@ -494,6 +495,27 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log(
             "SimulateRewards(): \t\t\t %18e ETH rewards distributed to: %s", amount, arrayIntoString(receivers, counter)
         );
+    }
+
+    /// @notice Slash a validator in the beacon chain.
+    /// @param amount Amount of ETH to slash, limited to uint80 because maximum slashing amount will be 3k ETH.
+    /// @param index Index to use to find an active validator, limited to uint8 because we should have more than 255
+    /// active validators, really low risk of overflow.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_slash(uint80 amount, uint8 index) public {
+        BeaconChain.Validator memory validator = beaconHelper.findValidatorWithStatus(BeaconChain.Status.ACTIVE, index);
+
+        // Ensure at least one active validator.
+        vm.assume(!validator.pubkey.eq(abi.encodePacked(NOT_FOUND)));
+
+        uint256 multiplicator = beaconChain.SLASHING_PENALTY_MULTIPLICATOR();
+        amount =
+            _bound(amount, validator.amount.mulWad(multiplicator), validator.amount.mulWad(multiplicator * 1000)).toUint80();
+
+        // Main call: slash
+        beaconChain.slash(validator.pubkey, amount);
+
+        console.log("Slash():    \t\t\t\t %18e ETH - pubkey: %s", amount, logPubkey(validator.pubkey));
     }
 
     ////////////////////////////////////////////////////

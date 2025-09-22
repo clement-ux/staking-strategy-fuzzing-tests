@@ -24,7 +24,7 @@ contract FuzzerFoundry is Properties {
         targetContract(address(this));
 
         // Add selectors
-        bytes4[] memory selectors = new bytes4[](17);
+        bytes4[] memory selectors = new bytes4[](18);
         selectors[0] = this.handler_deposit.selector;
         selectors[1] = this.handler_registerSsvValidator.selector;
         selectors[2] = this.handler_stakeEth.selector;
@@ -42,6 +42,7 @@ contract FuzzerFoundry is Properties {
         selectors[14] = this.handler_processWithdraw.selector; // beacon chain
         selectors[15] = this.handler_deactivateValidators.selector; // beacon chain
         selectors[16] = this.handler_simulateRewards.selector; // beacon chain
+        selectors[17] = this.handler_slash.selector; // beacon chain
 
         // Target selectors
         targetSelector(FuzzSelector({ addr: address(this), selectors: selectors }));

@@ -17,6 +17,7 @@ import { SSVNetwork } from "../src/SSVNetwork.sol";
 import { BeaconRoot } from "../src/BeaconRoot.sol";
 import { BeaconChain } from "../src/BeaconChain.sol";
 import { BeaconProofs } from "../src/BeaconProofs.sol";
+import { BeaconHelper } from "../src/BeaconHelper.sol";
 import { DepositContract } from "../src/DepositContract.sol";
 import { RewardDistributor } from "../src/RewardDistributor.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
@@ -66,6 +67,7 @@ contract Base is Test {
     BeaconRoot public beaconRoot;
     BeaconChain public beaconChain;
     BeaconProofs public beaconProofs;
+    BeaconHelper public beaconHelper;
     DepositContract public depositContract;
     RewardDistributor public rewardDistributor;
     PartialWithdrawContract public partialWithdrawContract;

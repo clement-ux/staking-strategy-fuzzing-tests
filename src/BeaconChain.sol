@@ -192,6 +192,7 @@ contract BeaconChain {
         if (currentStatus == Status.EXITED) {
             depositQueue.push(pendingDeposit);
             emit BeaconChain___DepositPostponed(pubkey, pendingDeposit.amount);
+            return;
         }
 
         // --- 2.c. Validator exists and is either DEPOSITED, ACTIVE or WITHDRAWABLE: increase stake
@@ -494,10 +495,9 @@ contract BeaconChain {
         require(validator.amount >= amount, "Insufficient validator balance to slash");
         require(validator.status == Status.ACTIVE, "Validator must be ACTIVE to be slashed");
         require(
-            amount >= SLASHING_PENALTY_MULTIPLICATOR * validator.amount,
+            amount >= validator.amount.mulWad(SLASHING_PENALTY_MULTIPLICATOR),
             "Slashing amount must be greater than minimum penalty"
         );
-        require(amount <= validator.amount, "Slashing amount exceeds validator balance");
 
         // Increase slashed amount, decrease validator amount will be done in sweep
         validator.amount -= amount;
