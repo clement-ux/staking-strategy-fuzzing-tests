@@ -370,43 +370,50 @@ contract BeaconChain {
     /// - WITHDRAWABLE: transfer all amount to owner and set amount to 0
     function processSweep() public {
         for (uint256 i = 0; i < validators.length; i++) {
-            bool success;
-            Validator storage validator = validators[i];
-            Status status = validator.status;
-            if (status == Status.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
-            if (status == Status.DEPOSITED) continue;
-            if (status == Status.ACTIVE) {
-                if (validator.amount > MAX_EFFECTIVE_BALANCE) {
-                    uint256 excess = validator.amount - MAX_EFFECTIVE_BALANCE;
-                    validator.amount = MAX_EFFECTIVE_BALANCE;
-
-                    // Transfer excess ETH to the validator owner
-                    (success,) = validator.owner.call{ value: excess }("");
-                    require(success, "Excess transfer failed");
-                    emit BeaconChain___Sweep(validator.pubkey, excess);
-                }
-            }
-            if (status == Status.EXITED) continue;
-            if (status == Status.WITHDRAWABLE) {
-                if (validator.amount == 0) continue; // Nothing to withdraw
-
-                uint256 remaining = validator.amount;
-                validator.amount = 0;
-                // Transfer all ETH to the validator owner
-                (success,) = validator.owner.call{ value: remaining }("");
-                require(success, "Withdrawable transfer failed");
-                emit BeaconChain___WithdrawProcessed(validator.pubkey, remaining);
-            }
+            _processSweep(i);
         }
     }
 
     /// @notice Processes sweep for fixed number of validators.
-    function processSweep(
-        uint256 count
-    ) public {
-        uint256 len = min(validators.length, count);
-        for (uint256 i; i < len; i++) {
-            processSweep();
+    /// @param count The number of validators to process.
+    function processSweep(uint256 count, uint256 startIndex) public returns (uint256 len) {
+        len = min(validators.length, count);
+        for (uint256 i = startIndex; i < len + startIndex; i++) {
+            _processSweep(i % len);
+        }
+    }
+
+    /// @notice Internal function to process sweep for a single validator by index.
+    /// @param index The index of the validator to process.
+    function _processSweep(
+        uint256 index
+    ) internal {
+        bool success;
+        Validator storage validator = validators[index];
+        Status status = validator.status;
+        if (status == Status.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
+        if (status == Status.DEPOSITED) return;
+        if (status == Status.ACTIVE) {
+            if (validator.amount > MAX_EFFECTIVE_BALANCE) {
+                uint256 excess = validator.amount - MAX_EFFECTIVE_BALANCE;
+                validator.amount = MAX_EFFECTIVE_BALANCE;
+
+                // Transfer excess ETH to the validator owner
+                (success,) = validator.owner.call{ value: excess }("");
+                require(success, "Excess transfer failed");
+                emit BeaconChain___Sweep(validator.pubkey, excess);
+            }
+        }
+        if (status == Status.EXITED) return;
+        if (status == Status.WITHDRAWABLE) {
+            if (validator.amount == 0) return; // Nothing to withdraw
+
+            uint256 remaining = validator.amount;
+            validator.amount = 0;
+            // Transfer all ETH to the validator owner
+            (success,) = validator.owner.call{ value: remaining }("");
+            require(success, "Withdrawable transfer failed");
+            emit BeaconChain___WithdrawProcessed(validator.pubkey, remaining);
         }
     }
 
