@@ -73,6 +73,8 @@ contract BeaconChain {
     Queue[] public withdrawQueue;
     Validator[] public validators; // unordered list of validator
 
+    uint256 public withdrawCounter; // counter to track number of withdraw processed
+
     mapping(bytes pubkey => bool registered) public ssvRegisteredValidators; // mapping of SSV registered validators
     mapping(bytes32 id => DepositStatus processed) public processedDeposits; // to help tracking processed deposits
 
@@ -91,7 +93,7 @@ contract BeaconChain {
     event BeaconChain___Withdraw(bytes pubkey, uint256 amount);
     event BeaconChain___PartialWithdrawProcessed(bytes pubkey, uint256 amount);
     event BeaconChain___WithdrawProcessed(bytes pubkey, uint256 amount);
-    event BeaconChain___WithdrawNotProcessed(bytes pubkey, string reason);
+    event BeaconChain___WithdrawNotProcessed(bytes pubkey, bytes32 udid, string reason);
 
     // Validators events
     event BeaconChain___ValidatorCreated(bytes pubkey);
@@ -220,14 +222,21 @@ contract BeaconChain {
     /// @dev Only the owner can request withdrawal.
     function withdraw(bytes calldata pubkey, uint256 amount, address requester) external {
         withdrawQueue.push(
-            Queue({ pubkey: pubkey, amount: amount, timestamp: uint64(block.timestamp), owner: requester, udid: 0 })
+            Queue({
+                pubkey: pubkey,
+                amount: amount,
+                timestamp: uint64(block.timestamp),
+                owner: requester,
+                udid: bytes32(abi.encodePacked(uint16(withdrawCounter++), bytes30(0)))
+            })
         );
         emit BeaconChain___Withdraw(pubkey, amount);
     }
 
     /// @notice Processes a withdrawal from the withdraw queue.
-    function processWithdraw() public {
-        if (withdrawQueue.length == 0) return; // No pending withdrawals
+    /// @notice Returns (pubkey, udid, amountWithdrawn). If no withdrawal processed, returns (0, 0, 0).
+    function processWithdraw() public returns (bytes memory, bytes32, uint256) {
+        if (withdrawQueue.length == 0) return (bytes(abi.encodePacked(uint256(0))), 0, 0); // No pending withdrawals
 
         // Store withdrawal in memory to avoid multiple SLOADs
         Queue memory pendingWithdrawal = withdrawQueue[0];
@@ -236,26 +245,27 @@ contract BeaconChain {
         _removeFromList(withdrawQueue, 0);
 
         bytes memory pubkey = pendingWithdrawal.pubkey;
+        bytes32 udid = pendingWithdrawal.udid;
 
         // Get the validator index corresponding to the pubkey, it must exist
         Validator storage validator = validators[getValidatorIndex(pubkey)];
 
         // Ensure validator is in correct state to process withdrawal
         if (validator.status != Status.ACTIVE) {
-            emit BeaconChain___WithdrawNotProcessed(pubkey, "Validator not ACTIVE state");
-            return;
+            emit BeaconChain___WithdrawNotProcessed(pubkey, udid, "Validator not ACTIVE state");
+            return (bytes(abi.encodePacked(NOT_FOUND)), udid, 0);
         }
 
         // Ensure only the owner can request withdrawal
         if (validator.owner != pendingWithdrawal.owner) {
-            emit BeaconChain___WithdrawNotProcessed(pubkey, "Only owner can request withdrawal");
-            return;
+            emit BeaconChain___WithdrawNotProcessed(pubkey, udid, "Only owner can request withdrawal");
+            return (bytes(abi.encodePacked(NOT_FOUND)), udid, 0);
         }
 
         // Ensure the validator has enough balance and deduct the amount for partial withdrawal
         if (pendingWithdrawal.amount != 0 && validator.amount < ACTIVATION_AMOUNT + pendingWithdrawal.amount) {
-            emit BeaconChain___WithdrawNotProcessed(pubkey, "Insufficient validator balance");
-            return;
+            emit BeaconChain___WithdrawNotProcessed(pubkey, udid, "Insufficient validator balance");
+            return (bytes(abi.encodePacked(NOT_FOUND)), udid, 0);
         }
 
         // There is two option, partial or full withdrawal
@@ -269,7 +279,7 @@ contract BeaconChain {
             require(success, "Withdrawal transfer failed");
 
             emit BeaconChain___PartialWithdrawProcessed(pubkey, pendingWithdrawal.amount);
-            return; // Partial withdrawal processed
+            return (pubkey, udid, pendingWithdrawal.amount); // Partial withdrawal processed
         }
 
         // 2. Full withdrawal:
@@ -277,7 +287,7 @@ contract BeaconChain {
             // Only mark the validator as EXITED, actual withdrawal will be processed in sweep
             validator.status = Status.EXITED;
             emit BeaconChain___StatusChanged(pubkey, validator.amount, Status.ACTIVE, Status.EXITED);
-            return;
+            return (pubkey, udid, validator.amount);
         }
 
         // This should never happen, but just in case, to avoid useless fuzz calls

@@ -26,7 +26,7 @@ abstract contract TargetFunctions is FuzzerBase {
     //
     // --- BeaconChain
     // [x] processDeposit
-    // [ ] processWithdraw
+    // [x] processWithdraw
     // [x] activateValidators
     // [ ] deactivateValidators
     // [x] processSweep
@@ -346,12 +346,14 @@ abstract contract TargetFunctions is FuzzerBase {
         vm.prank(operator);
         strategy.validatorWithdrawal({ publicKey: pubkey, amountGwei: amountToWithdraw });
 
+        bytes32 udid = bytes32(abi.encodePacked(uint16(beaconChain.withdrawCounter() - 1), bytes30(0)));
+
         // Log the withdrawal.
         console.log(
-            "ValidatorWithdrawal(): \t\t",
-            fullWithdraw ? "full" : string("partial %18e ETH").concat(vm.toString(uint256(amountToWithdraw) * 1 gwei)),
-            " from: ",
-            logPubkey(pubkey)
+            "ValidatorWithdrawal(): \t\t %18e ETH - pubkey: %s, udid: %s",
+            uint256(amountToWithdraw) * 1 gwei,
+            logPubkey(pubkey),
+            logUdid(udid)
         );
     }
 
@@ -446,6 +448,19 @@ abstract contract TargetFunctions is FuzzerBase {
         uint256 len = beaconChain.processSweep(count, index);
 
         console.log("ProcessSweep(): \t\t\t processed %d validators (%d total)", len, validatorsCount);
+    }
+
+    function handler_processWithdraw() public {
+        vm.assume(beaconChain.getWithdrawQueueLength() > 0); // Ensure there is at least one withdraw to process.
+
+        // Main call: processWithdraw
+        (bytes memory pubkey, bytes32 udid, uint256 amount) = beaconChain.processWithdraw();
+
+        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+            console.log("ProcessWithdraw(): \t\t\t udid: %s thrown as not possible to process", logUdid(udid));
+        }
+
+        console.log("ProcessWithdraw(): \t\t\t%18e ETH pubkey: %s, udid: %s", amount, logPubkey(pubkey), logUdid(udid));
     }
 
     ////////////////////////////////////////////////////
