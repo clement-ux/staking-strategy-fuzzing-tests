@@ -504,12 +504,15 @@ contract BeaconChain {
     ) public {
         require(ssvRegisteredValidators[pubkey], "Validator not registered");
 
-        Validator memory validator = validators[getValidatorIndex(pubkey)];
+        uint256 index = getValidatorIndex(pubkey);
+        if (index != NOT_FOUND) {
+            Validator memory validator = validators[index];
 
-        if (validator.status == Status.DEPOSITED) return; // Cannot remove if still DEPOSITED
+            if (validator.status == Status.DEPOSITED) return; // Cannot remove if still DEPOSITED
 
-        // Force exit if validator is still active
-        if (validator.status == Status.ACTIVE) slash(pubkey, SLASHING_PENALTY_MULTIPLICATOR * validator.amount);
+            // Force exit if validator is still active
+            if (validator.status == Status.ACTIVE) slash(pubkey, SLASHING_PENALTY_MULTIPLICATOR * validator.amount);
+        }
 
         ssvRegisteredValidators[pubkey] = false;
         emit SSVNetwork___ValidatorRemoved(pubkey);
