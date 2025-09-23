@@ -9,8 +9,9 @@ import { console } from "@forge-std/console.sol";
 import { LibBytes } from "@solady/utils/LibBytes.sol";
 import { LibString } from "@solady/utils/LibString.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
-import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
+import { LibConstant } from "./libraries/LibConstant.sol";
 import { LibValidator } from "test/libraries/LibValidator.sol";
+import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
 
 // Beacon
 import { BeaconChain } from "src/BeaconChain.sol";
@@ -112,7 +113,7 @@ abstract contract TargetFunctions is FuzzerBase {
         // Pick a random validator that have NOT_REGISTERED status.
         bytes memory pubkey = validatorWithStatus(CompoundingValidatorManager.ValidatorState.NON_REGISTERED, index);
         // If all validators are already registered, skip the registration.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
             logAssume(false, "RegisterSsvValidator(): \t\t all validators are already registered");
         }
 
@@ -139,7 +140,7 @@ abstract contract TargetFunctions is FuzzerBase {
         // Some assertions to ensure the staking can be done.
         vm.assume(balanceInGwei >= 1 gwei); // Ensure there is at least 1 gwei to stake.
         vm.assume(!strategy.firstDeposit()); // Ensure not 2 deposits for 2 different validators that are not verified.
-        vm.assume(strategy.depositListLength() < MAX_DEPOSITS); // Ensure we don't exceed max deposits.
+        vm.assume(strategy.depositListLength() < LibConstant.MAX_DEPOSITS); // Ensure we don't exceed max deposits.
 
         // Pick a random validator that have either REGISTERED, VERIFIED or ACTIVE status.
         (bytes memory pubkey, CompoundingValidatorManager.ValidatorState status) = validatorWithStatus(
@@ -149,7 +150,7 @@ abstract contract TargetFunctions is FuzzerBase {
             index
         );
         // If no validator match the criteria, skip the staking.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
             logAssume(false, "StakeEth(): \t\t\t\t all validators are already staked");
         }
 
@@ -159,7 +160,7 @@ abstract contract TargetFunctions is FuzzerBase {
         // If validator is REGISTERED, deposit should be exactly 1 ETH.
         if (status == CompoundingValidatorManager.ValidatorState.REGISTERED) {
             // Ensure we don't exceed max verified validators.
-            vm.assume(strategy.verifiedValidatorsLength() + 1 < MAX_VERIFIED_VALIDATORS);
+            vm.assume(strategy.verifiedValidatorsLength() + 1 < LibConstant.MAX_VERIFIED_VALIDATORS);
 
             // Convert amountInGwei to exactly 1 gwei.
             amountInGwei = 1 gwei;
@@ -203,7 +204,7 @@ abstract contract TargetFunctions is FuzzerBase {
         // Pick a random validator that have STAKED status.
         bytes memory pubkey = existingValidatorWithStatus(CompoundingValidatorManager.ValidatorState.STAKED, index);
         // If no validator match the criteria, skip the verification.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
             logAssume(false, "VerifyValidator(): \t\t all validators are already verified");
         }
         bytes32 pubkeyHash = pubkey.hashPubkey();
@@ -243,7 +244,7 @@ abstract contract TargetFunctions is FuzzerBase {
             index
         );
         // If no deposit match the criteria, skip the verification.
-        if (pendingDepositRoot == bytes32(abi.encodePacked(NOT_FOUND))) {
+        if (pendingDepositRoot == LibConstant.NOT_FOUND_BYTES32) {
             logAssume(false, "VerifyDeposit(): \t\t all deposits are already verified");
         }
 
@@ -275,7 +276,7 @@ abstract contract TargetFunctions is FuzzerBase {
         (, uint64 snapTimestamp,) = strategy.snappedBalance();
 
         // Prevent calling snapBalances too often.
-        vm.assume(snapTimestamp + SNAP_BALANCES_DELAY < block.timestamp);
+        vm.assume(snapTimestamp + LibConstant.SNAP_BALANCES_DELAY < block.timestamp);
 
         // Main call: snapBalances
         strategy.snapBalances();
@@ -339,7 +340,7 @@ abstract contract TargetFunctions is FuzzerBase {
         (bytes memory pubkey,) = pleaseFindBetterName(fullWithdraw, index);
 
         // If no validator match the criteria, skip the withdrawal.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
             logAssume(
                 false, "ValidatorWithdrawal(): \t all validators are either not active or exiting with pending deposits"
             );
@@ -403,7 +404,7 @@ abstract contract TargetFunctions is FuzzerBase {
         bytes memory pubkey = beaconChain.activateValidator();
 
         // Ensure at least one validator was activated.
-        vm.assume(!pubkey.eq(abi.encodePacked(NOT_FOUND)));
+        vm.assume(!pubkey.eq(LibConstant.NOT_FOUND_BYTES));
 
         // Log the activation.
         console.log("ActivateValidators(): \t\t", logPubkey(pubkey));
@@ -424,7 +425,7 @@ abstract contract TargetFunctions is FuzzerBase {
             index
         );
         // If no validator match the criteria, skip the removal.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) vm.assume(false);
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) vm.assume(false);
 
         // Main call: removeSsvValidator
         vm.prank(operator);
@@ -461,7 +462,7 @@ abstract contract TargetFunctions is FuzzerBase {
         // Main call: processWithdraw
         (bytes memory pubkey, bytes32 udid, uint256 amount) = beaconChain.processWithdraw();
 
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
             console.log("ProcessWithdraw(): \t\t\t udid: %s thrown as not possible to process", logUdid(udid));
         }
 
@@ -508,9 +509,9 @@ abstract contract TargetFunctions is FuzzerBase {
         BeaconChain.Validator memory validator = beaconHelper.findValidatorWithStatus(BeaconChain.Status.ACTIVE, index);
 
         // Ensure at least one active validator.
-        vm.assume(!validator.pubkey.eq(abi.encodePacked(NOT_FOUND)));
+        vm.assume(!validator.pubkey.eq(LibConstant.NOT_FOUND_BYTES));
 
-        uint256 multiplicator = beaconChain.SLASHING_PENALTY_MULTIPLICATOR();
+        uint256 multiplicator = LibConstant.SLASHING_PENALTY_MULTIPLICATOR;
         amount =
             _bound(amount, validator.amount.mulWad(multiplicator), validator.amount.mulWad(multiplicator * 1000)).toUint80();
 

@@ -30,16 +30,6 @@ import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 ///         - No logic or setup should be included here, only state variable declarations
 contract Base is Test {
     ////////////////////////////////////////////////////
-    /// --- CONSTANTS & IMMUTABLES
-    ////////////////////////////////////////////////////
-    uint16 public constant MAX_VALIDATORS = 21;
-    uint64 public constant GENESIS_TIMESTAMP = 1_606_824_023;
-    uint256 public constant MAX_VERIFIED_VALIDATORS = 48;
-    address public constant BEACON_ROOTS_ADDRESS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
-    address public constant DEPOSIT_CONTRACT_ADDRESS = 0x00000000219ab540356cBB839Cbe05303d7705Fa;
-    address public constant WITHDRAWAL_REQUEST_ADDRESS = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
-
-    ////////////////////////////////////////////////////
     /// --- STORAGE VARIABLES
     ////////////////////////////////////////////////////
     // Users

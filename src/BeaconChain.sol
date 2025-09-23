@@ -8,6 +8,7 @@ import { RewardDistributor } from "./RewardDistributor.sol";
 // Helper
 import { LibBytes } from "@solady/utils/LibBytes.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
+import { LibConstant } from "../test/libraries/LibConstant.sol";
 import { LibValidator } from "../test/libraries/LibValidator.sol";
 import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
 
@@ -16,20 +17,6 @@ contract BeaconChain {
     using SafeCastLib for uint256;
     using LibValidator for bytes;
     using FixedPointMathLib for uint256;
-
-    ////////////////////////////////////////////////////
-    /// --- CONSTRANTS & IMMUTABLES
-    ////////////////////////////////////////////////////
-    uint256 public constant NOT_FOUND = type(uint256).max;
-    uint256 public constant MIN_DEPOSIT = 1 ether;
-    uint256 public constant ACTIVATION_AMOUNT = 32 ether;
-    uint256 public constant MAX_EFFECTIVE_BALANCE = 2048 ether;
-    uint256 public constant FIXED_REWARD_PERCENTAGE = 0.01 ether; // 1% fixed reward for simulation
-    uint256 public constant SLASHING_PENALTY_MULTIPLICATOR = 0.00024375 ether;
-
-    // Address where slashing rewards are sent to (generated using pk = uint256(keccak256(abi.encodePacked("name")))).
-    // Using a real address instead of zero, to track ETH flow in tests.
-    address public constant SLASHING_REWARD_RECIPIENT = address(0x91a36674f318e82322241CB62f771c90e3B77acb);
 
     RewardDistributor public immutable REWARD_DISTRIBUTOR = new RewardDistributor();
 
@@ -122,7 +109,7 @@ contract BeaconChain {
         bytes calldata signature,
         bytes32 /*deposit_data_root*/
     ) public payable {
-        require(msg.value >= MIN_DEPOSIT, "Minimum deposit is 1 ETH");
+        require(msg.value >= LibConstant.MIN_DEPOSIT, "Minimum deposit is 1 ETH");
         require(ssvRegisteredValidators[pubkey], "Validator not registered in SSVNetwork");
 
         // recreate the pendingDepositRoot, that will be used as unique deposit ID
@@ -167,7 +154,7 @@ contract BeaconChain {
         uint256 index = getValidatorIndex(pubkey);
 
         // --- 1. Validator doesn't exist for this pubkey, create it and add amount
-        if (index == NOT_FOUND) {
+        if (index == LibConstant.NOT_FOUND) {
             validators.push(
                 Validator({
                     pubkey: pendingDeposit.pubkey,
@@ -256,24 +243,24 @@ contract BeaconChain {
         // Ensure validator is in correct state to process withdrawal
         if (validator.status != Status.ACTIVE) {
             emit BeaconChain___WithdrawNotProcessed(pubkey, udid, "Validator not ACTIVE state");
-            return (bytes(abi.encodePacked(NOT_FOUND)), udid, 0);
+            return (LibConstant.NOT_FOUND_BYTES, udid, 0);
         }
 
         // Ensure only the owner can request withdrawal
         if (validator.owner != pendingWithdrawal.owner) {
             emit BeaconChain___WithdrawNotProcessed(pubkey, udid, "Only owner can request withdrawal");
-            return (bytes(abi.encodePacked(NOT_FOUND)), udid, 0);
+            return (LibConstant.NOT_FOUND_BYTES, udid, 0);
         }
 
         // Ensure the validator has enough balance and deduct the amount for partial withdrawal
-        if (pendingWithdrawal.amount != 0 && validator.amount < ACTIVATION_AMOUNT + pendingWithdrawal.amount) {
+        if (pendingWithdrawal.amount != 0 && validator.amount < LibConstant.ACTIVATION_AMOUNT + pendingWithdrawal.amount) {
             emit BeaconChain___WithdrawNotProcessed(pubkey, udid, "Insufficient validator balance");
-            return (bytes(abi.encodePacked(NOT_FOUND)), udid, 0);
+            return (LibConstant.NOT_FOUND_BYTES, udid, 0);
         }
 
         // There is two option, partial or full withdrawal
         // 1. Partial withdrawal:
-        if (pendingWithdrawal.amount != 0 && validator.amount >= ACTIVATION_AMOUNT + pendingWithdrawal.amount) {
+        if (pendingWithdrawal.amount != 0 && validator.amount >= LibConstant.ACTIVATION_AMOUNT + pendingWithdrawal.amount) {
             // Reduce instantly the validator amount
             validator.amount -= pendingWithdrawal.amount;
 
@@ -322,7 +309,7 @@ contract BeaconChain {
         uint256 len = min(validators.length, count);
         for (uint256 i; i < len; i++) {
             Validator storage validator = validators[i];
-            if (validator.status == Status.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
+            if (validator.status == Status.DEPOSITED && validator.amount >= LibConstant.ACTIVATION_AMOUNT) {
                 validator.status = Status.ACTIVE;
                 emit BeaconChain___StatusChanged(validator.pubkey, validator.amount, Status.DEPOSITED, Status.ACTIVE);
             }
@@ -334,13 +321,13 @@ contract BeaconChain {
         uint256 len = validators.length;
         for (uint256 i; i < len; i++) {
             Validator storage validator = validators[i];
-            if (validator.status == Status.DEPOSITED && validator.amount >= ACTIVATION_AMOUNT) {
+            if (validator.status == Status.DEPOSITED && validator.amount >= LibConstant.ACTIVATION_AMOUNT) {
                 validator.status = Status.ACTIVE;
                 emit BeaconChain___StatusChanged(validator.pubkey, validator.amount, Status.DEPOSITED, Status.ACTIVE);
                 return validator.pubkey;
             }
         }
-        return bytes(abi.encodePacked(NOT_FOUND)); // No validator activated
+        return LibConstant.NOT_FOUND_BYTES; // No validator activated
     }
 
     /// @notice Goes through all validators and change status from EXITED to WITHDRAWABLE.
@@ -420,9 +407,9 @@ contract BeaconChain {
         if (status == Status.UNKNOWN) revert("Validator in UNKNOWN state"); // should never happen
         if (status == Status.DEPOSITED) return;
         if (status == Status.ACTIVE) {
-            if (validator.amount > MAX_EFFECTIVE_BALANCE) {
-                uint256 excess = validator.amount - MAX_EFFECTIVE_BALANCE;
-                validator.amount = MAX_EFFECTIVE_BALANCE;
+            if (validator.amount > LibConstant.MAX_EFFECTIVE_BALANCE) {
+                uint256 excess = validator.amount - LibConstant.MAX_EFFECTIVE_BALANCE;
+                validator.amount = LibConstant.MAX_EFFECTIVE_BALANCE;
 
                 // Transfer excess ETH to the validator owner
                 (success,) = validator.owner.call{ value: excess }("");
@@ -469,7 +456,7 @@ contract BeaconChain {
             Validator storage validator = validators[i];
             if (validator.status == Status.ACTIVE) {
                 // Calculate reward as a fixed percentage of the validator's amount
-                uint256 reward = validator.amount.mulWad(FIXED_REWARD_PERCENTAGE);
+                uint256 reward = validator.amount.mulWad(LibConstant.FIXED_REWARD_PERCENTAGE);
 
                 // Increase the validator's amount by the reward
                 validator.amount += reward;
@@ -497,7 +484,7 @@ contract BeaconChain {
         require(validator.amount >= amount, "Insufficient validator balance to slash");
         require(validator.status == Status.ACTIVE, "Validator must be ACTIVE to be slashed");
         require(
-            amount >= validator.amount.mulWad(SLASHING_PENALTY_MULTIPLICATOR),
+            amount >= validator.amount.mulWad(LibConstant.SLASHING_PENALTY_MULTIPLICATOR),
             "Slashing amount must be greater than minimum penalty"
         );
 
@@ -505,7 +492,7 @@ contract BeaconChain {
         validator.amount -= amount;
 
         // Send slashed amount to the slashing reward recipient
-        (bool success,) = SLASHING_REWARD_RECIPIENT.call{ value: amount }("");
+        (bool success,) = LibConstant.SLASHING_REWARD_RECIPIENT.call{ value: amount }("");
         require(success, "Slashing transfer failed");
 
         // Slashed validators are forced to exit
@@ -527,7 +514,7 @@ contract BeaconChain {
         bytes memory pubkey
     ) public {
         require(!ssvRegisteredValidators[pubkey], "Validator already registered");
-        require(getValidatorIndex(pubkey) == NOT_FOUND, "Validator already exists in BeaconChain");
+        require(getValidatorIndex(pubkey) == LibConstant.NOT_FOUND, "Validator already exists in BeaconChain");
         ssvRegisteredValidators[pubkey] = true;
 
         emit SSVNetwork___ValidatorRegistered(pubkey);
@@ -542,13 +529,15 @@ contract BeaconChain {
         require(ssvRegisteredValidators[pubkey], "Validator not registered");
 
         uint256 index = getValidatorIndex(pubkey);
-        if (index != NOT_FOUND) {
+        if (index != LibConstant.NOT_FOUND) {
             Validator memory validator = validators[index];
 
             if (validator.status == Status.DEPOSITED) return; // Cannot remove if still DEPOSITED
 
             // Force exit if validator is still active
-            if (validator.status == Status.ACTIVE) slash(pubkey, SLASHING_PENALTY_MULTIPLICATOR * validator.amount);
+            if (validator.status == Status.ACTIVE) {
+                slash(pubkey, LibConstant.SLASHING_PENALTY_MULTIPLICATOR * validator.amount);
+            }
         }
 
         ssvRegisteredValidators[pubkey] = false;
@@ -643,13 +632,13 @@ contract BeaconChain {
 
     /// @notice Returns the index of a validator by public key.
     /// @param pubkey The public key of the validator.
-    /// @return The index of the validator, or NOT_FOUND if not found.
+    /// @return The index of the validator, or LibConstant.NOT_FOUND if not found.
     function getValidatorIndex(
         bytes memory pubkey
     ) public view returns (uint256) {
         for (uint256 i = 0; i < validators.length; i++) {
             if (validators[i].pubkey.eq(pubkey)) return i;
         }
-        return NOT_FOUND; // Not found
+        return LibConstant.NOT_FOUND; // Not found
     }
 }

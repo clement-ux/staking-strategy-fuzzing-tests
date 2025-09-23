@@ -4,8 +4,6 @@ pragma solidity 0.8.29;
 // Base
 import { Base } from "./Base.sol";
 
-import { console } from "@forge-std/console.sol";
-
 // Contract to test
 import { InitializableAbstractStrategy } from "@origin-dollar/utils/InitializableAbstractStrategy.sol";
 import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
@@ -24,6 +22,7 @@ import { DepositContract } from "../src/DepositContract.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 
 // Utils
+import { LibConstant } from "./libraries/LibConstant.sol";
 import { LibValidator } from "./libraries/LibValidator.sol";
 
 /// @title Setup
@@ -81,7 +80,7 @@ contract Setup is Base {
         deal(address(bobby), 1_000_000 ether);
 
         // Create validators and map pubkey hash to pubkey
-        for (uint16 i = 1; i <= MAX_VALIDATORS; i++) {
+        for (uint16 i = 1; i <= LibConstant.MAX_VALIDATORS; i++) {
             // Create a mock pubkey
             bytes memory pubkey = i.createPubkey();
 
@@ -106,12 +105,12 @@ contract Setup is Base {
         beaconChain.setBeaconProofs(address(beaconProofs));
 
         // Deploy DepositContract and PartialWithdrawContract to their respective addresses on mainnet
-        deployCodeTo("BeaconRoot.sol", abi.encode(), BEACON_ROOTS_ADDRESS);
-        deployCodeTo("DepositContract.sol", abi.encode(address(beaconChain)), DEPOSIT_CONTRACT_ADDRESS);
-        deployCodeTo("PartialWithdrawContract.sol", abi.encode(address(beaconChain)), WITHDRAWAL_REQUEST_ADDRESS);
-        beaconRoot = BeaconRoot(payable(BEACON_ROOTS_ADDRESS));
-        depositContract = DepositContract(payable(DEPOSIT_CONTRACT_ADDRESS));
-        partialWithdrawContract = PartialWithdrawContract(payable(WITHDRAWAL_REQUEST_ADDRESS));
+        deployCodeTo("BeaconRoot.sol", abi.encode(), LibConstant.BEACON_ROOTS_ADDRESS);
+        deployCodeTo("DepositContract.sol", abi.encode(address(beaconChain)), LibConstant.DEPOSIT_CONTRACT_ADDRESS);
+        deployCodeTo("PartialWithdrawContract.sol", abi.encode(address(beaconChain)), LibConstant.WITHDRAWAL_REQUEST_ADDRESS);
+        beaconRoot = BeaconRoot(payable(LibConstant.BEACON_ROOTS_ADDRESS));
+        depositContract = DepositContract(payable(LibConstant.DEPOSIT_CONTRACT_ADDRESS));
+        partialWithdrawContract = PartialWithdrawContract(payable(LibConstant.WITHDRAWAL_REQUEST_ADDRESS));
 
         // Then deploy SSVNetwork contract
         ssvNetwork = new SSVNetwork(address(beaconChain));
@@ -144,7 +143,7 @@ contract Setup is Base {
             address(ssvNetwork),
             address(depositContract),
             address(beaconProofs),
-            GENESIS_TIMESTAMP
+            LibConstant.GENESIS_TIMESTAMP
         );
 
         // ---

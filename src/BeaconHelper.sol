@@ -4,19 +4,17 @@ pragma solidity 0.8.29;
 // Contracts
 import { BeaconChain } from "./BeaconChain.sol";
 
-contract BeaconHelper {
-    ////////////////////////////////////////////////////
-    /// --- CONSTANTS & IMMUTABLES
-    ////////////////////////////////////////////////////
-    uint256 public constant NOT_FOUND = type(uint256).max;
+// Helpers
+import { LibConstant } from "../test/libraries/LibConstant.sol";
 
+contract BeaconHelper {
     ////////////////////////////////////////////////////
     /// --- STORAGE
     ////////////////////////////////////////////////////
     BeaconChain public beaconChain;
 
     BeaconChain.Validator public notFoundValidator =
-        BeaconChain.Validator(abi.encodePacked(NOT_FOUND), address(0), 0, BeaconChain.Status.UNKNOWN);
+        BeaconChain.Validator(LibConstant.NOT_FOUND_BYTES, address(0), 0, BeaconChain.Status.UNKNOWN);
 
     ////////////////////////////////////////////////////
     /// --- CONSTRUCTOR

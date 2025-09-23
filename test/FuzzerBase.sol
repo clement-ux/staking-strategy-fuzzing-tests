@@ -7,6 +7,7 @@ import { Setup } from "test/Setup.sol";
 // Helpers
 import { console } from "@forge-std/console.sol";
 import { LibString } from "@solady/utils/LibString.sol";
+import { LibConstant } from "./libraries/LibConstant.sol";
 import { LibValidator } from "test/libraries/LibValidator.sol";
 
 // Target contracts
@@ -24,11 +25,6 @@ abstract contract FuzzerBase is Setup {
     ////////////////////////////////////////////////////
     /// --- CONSTANTS & IMMUTABLES
     ////////////////////////////////////////////////////
-    uint64 public constant SLOT_DURATION = 12; // seconds
-
-    uint256 public constant NOT_FOUND = type(uint256).max;
-    uint256 public constant MAX_DEPOSITS = 12;
-    uint256 public constant SNAP_BALANCES_DELAY = 35 * 12; // ~35 slots, i.e. ~7 minutes
 
     ////////////////////////////////////////////////////
     /// --- STORAGE
@@ -82,7 +78,7 @@ abstract contract FuzzerBase is Setup {
         uint64 slot
     ) public pure returns (uint64) {
         // Calculate the next block timestamp from the slot.
-        return SLOT_DURATION * slot + GENESIS_TIMESTAMP + SLOT_DURATION;
+        return LibConstant.SLOT_DURATION * slot + LibConstant.GENESIS_TIMESTAMP + LibConstant.SLOT_DURATION;
     }
 
     ////////////////////////////////////////////////////
@@ -112,7 +108,7 @@ abstract contract FuzzerBase is Setup {
         }
 
         // If no validator found, return NOT_FOUND
-        return abi.encodePacked(NOT_FOUND);
+        return LibConstant.NOT_FOUND_BYTES;
     }
 
     /// @notice Finds an existing validator (i.e., registered on the beacon chain) with a specific status starting from a
@@ -139,11 +135,11 @@ abstract contract FuzzerBase is Setup {
             uint256 beaconIndex = beaconChain.getValidatorIndex(pubkey);
 
             // If status matches, return the pubkey
-            if (currentStatus == status && beaconIndex != NOT_FOUND) return pubkey;
+            if (currentStatus == status && beaconIndex != LibConstant.NOT_FOUND) return pubkey;
         }
 
         // If no validator found, return NOT_FOUND
-        return abi.encodePacked(NOT_FOUND);
+        return LibConstant.NOT_FOUND_BYTES;
     }
 
     /// @notice Finds a validator having one of the two specific statuses starting from a given index.
@@ -172,7 +168,7 @@ abstract contract FuzzerBase is Setup {
         }
 
         // If no validator found, return NOT_FOUND
-        return (abi.encodePacked(NOT_FOUND), CompoundingValidatorManager.ValidatorState.NON_REGISTERED);
+        return (LibConstant.NOT_FOUND_BYTES, CompoundingValidatorManager.ValidatorState.NON_REGISTERED);
     }
 
     function pleaseFindBetterName(
@@ -221,7 +217,7 @@ abstract contract FuzzerBase is Setup {
         }
 
         // If no validator found, return NOT_FOUND
-        return (abi.encodePacked(NOT_FOUND), CompoundingValidatorManager.ValidatorState.NON_REGISTERED);
+        return (LibConstant.NOT_FOUND_BYTES, CompoundingValidatorManager.ValidatorState.NON_REGISTERED);
     }
 
     /// @notice Finds a validator having one of the three specific statuses starting from a given index.
@@ -254,7 +250,7 @@ abstract contract FuzzerBase is Setup {
         }
 
         // If no validator found, return NOT_FOUND
-        return (abi.encodePacked(NOT_FOUND), CompoundingValidatorManager.ValidatorState.NON_REGISTERED);
+        return (LibConstant.NOT_FOUND_BYTES, CompoundingValidatorManager.ValidatorState.NON_REGISTERED);
     }
 
     ////////////////////////////////////////////////////
@@ -276,7 +272,7 @@ abstract contract FuzzerBase is Setup {
             if (currentStatus == status) return pendingDepositRoot;
         }
 
-        return (bytes32(abi.encodePacked(NOT_FOUND)));
+        return (LibConstant.NOT_FOUND_BYTES32);
     }
 
     /// @notice Finds a deposit and its associated validator with specific statuses starting from a given index.
@@ -307,7 +303,7 @@ abstract contract FuzzerBase is Setup {
             }
         }
 
-        return (bytes32(abi.encodePacked(NOT_FOUND)), bytes32(abi.encodePacked(NOT_FOUND)));
+        return (LibConstant.NOT_FOUND_BYTES32, LibConstant.NOT_FOUND_BYTES32);
     }
 
     struct ExpectedStatus {
@@ -337,7 +333,7 @@ abstract contract FuzzerBase is Setup {
             if (success) return (pendingDepositRoot, pubKeyHash, slot);
         }
 
-        return (bytes32(abi.encodePacked(NOT_FOUND)), bytes32(abi.encodePacked(NOT_FOUND)), 0);
+        return (LibConstant.NOT_FOUND_BYTES32, LibConstant.NOT_FOUND_BYTES32, 0);
     }
 
     function areStatusCorrect(
