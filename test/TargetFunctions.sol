@@ -2,12 +2,13 @@
 pragma solidity 0.8.29;
 
 // Test imports
-import { FuzzerBase } from "test/FuzzerBase.sol";
+import { Setup } from "test/Setup.sol";
 
 // Helpers
 import { console } from "@forge-std/console.sol";
 import { LibBytes } from "@solady/utils/LibBytes.sol";
 import { LibString } from "@solady/utils/LibString.sol";
+import { LibLogger } from "test/libraries/LibLogger.sol";
 import { LibBeacon } from "test/libraries/LibBeacon.sol";
 import { LibStrategy } from "test/libraries/LibStrategy.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
@@ -25,7 +26,7 @@ import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeS
 /// @title TargetFunctions
 /// @notice TargetFunctions contract for tests, containing the target functions that should be tested.
 ///         This is the entry point with the contract we are testing. Ideally, it should never revert.
-abstract contract TargetFunctions is FuzzerBase {
+abstract contract TargetFunctions is Setup {
     // ╔══════════════════════════════════════════════════════════════════════════════╗
     // ║                           ✦✦✦ TARGET FUNCTIONS ✦✦✦                           ║
     // ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -57,21 +58,16 @@ abstract contract TargetFunctions is FuzzerBase {
     // ------------------------
 
     using LibBytes for bytes;
+    using LibLogger for bytes;
+    using LibLogger for string;
+    using LibLogger for bytes[];
+    using LibLogger for bytes32;
     using LibString for string;
     using LibBeacon for uint64;
     using SafeCastLib for uint256;
     using LibValidator for bytes;
     using FixedPointMathLib for uint256;
     using LibStrategy for CompoundingStakingSSVStrategy;
-
-    ////////////////////////////////////////////////////
-    /// --- SETUP
-    ////////////////////////////////////////////////////
-    function setUp() public virtual override {
-        super.setUp();
-
-        // Gives a little boost at the start, to get more relevant situations right away:
-    }
 
     ////////////////////////////////////////////////////
     /// --- STRATEGY HANDLERS
@@ -122,7 +118,7 @@ abstract contract TargetFunctions is FuzzerBase {
         (bytes memory pubkey,) = strategy.validatorWithStatus(expectedStatus, validators, index);
         // If all validators are already registered, skip the registration.
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
-            logAssume(false, "RegisterSsvValidator(): \t\t all validators are already registered");
+            string("RegisterSsvValidator(): \t\t all validators are already registered").logAssume();
         }
 
         // Main call: registerSsvValidator
@@ -130,7 +126,7 @@ abstract contract TargetFunctions is FuzzerBase {
         strategy.registerSsvValidator(pubkey, new uint64[](0), bytes(""), 0, emptyCluster);
 
         // Log the registration.
-        console.log("RegisterSsvValidator(): \t\t", logPubkey(pubkey));
+        console.log("RegisterSsvValidator(): \t\t", pubkey.logPubkey());
     }
 
     /// @notice Stake ETH.
@@ -160,11 +156,11 @@ abstract contract TargetFunctions is FuzzerBase {
             strategy.validatorWithStatus(expectedStatus, validators, index);
         // If no validator match the criteria, skip the staking.
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
-            logAssume(false, "StakeEth(): \t\t\t\t all validators are already staked");
+            string("StakeEth(): \t\t\t\t all validators are already staked").logAssume();
         }
 
         // Bound the amount to stake between 1 ether and the minimum of 3k ether or the strategy balance.
-        amountInGwei = _bound(amountInGwei, 1 gwei, min(3000 gwei, balanceInGwei)).toUint48();
+        amountInGwei = _bound(amountInGwei, 1 gwei, balanceInGwei.min(3000 gwei)).toUint48();
 
         // If validator is REGISTERED, deposit should be exactly 1 ETH.
         if (status == CompoundingValidatorManager.ValidatorState.REGISTERED) {
@@ -199,7 +195,7 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log(
             "StakeEth(): \t\t\t\t%18e",
             uint256(amountInGwei) * 1 gwei,
-            string("ETH to:").concat(logPubkey(pubkey)).concat(" udid: ").concat(logUdid(pendingDepositRoot))
+            string("ETH to:").concat(pubkey.logPubkey()).concat(" udid: ").concat(pendingDepositRoot.logUdid())
         );
     }
 
@@ -217,7 +213,7 @@ abstract contract TargetFunctions is FuzzerBase {
         (bytes memory pubkey,) = strategy.validatorWithStatusOnBeaconChain(beaconChain, expectedStatus, validators, index);
         // If no validator match the criteria, skip the verification.
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
-            logAssume(false, "VerifyValidator(): \t\t all validators are already verified");
+            string("VerifyValidator(): \t\t all validators are already verified").logAssume();
         }
         bytes32 pubkeyHash = pubkey.hashPubkey();
 
@@ -231,7 +227,7 @@ abstract contract TargetFunctions is FuzzerBase {
         });
 
         // Log the verification.
-        console.log("VerifyValidator(): \t\t\t", logPubkey(pubkey));
+        console.log("VerifyValidator(): \t\t\t", pubkey.logPubkey());
     }
 
     /// @notice Verify a deposit.
@@ -250,7 +246,7 @@ abstract contract TargetFunctions is FuzzerBase {
         (bytes32 pendingDepositRoot, bytes32 pubKeyHash, uint64 slot) = strategy.depositToVerify(beaconChain, index);
         // If no deposit match the criteria, skip the verification.
         if (pendingDepositRoot == LibConstant.NOT_FOUND_BYTES32) {
-            logAssume(false, "VerifyDeposit(): \t\t all deposits are already verified");
+            string("VerifyDeposit(): \t\t all deposits are already verified").logAssume();
         }
 
         (, uint64 snapTimestamp,) = strategy.snappedBalance();
@@ -268,7 +264,9 @@ abstract contract TargetFunctions is FuzzerBase {
         });
 
         // Log the verification.
-        console.log("VerifyDeposit(): \t\t\t", logPubkey(hashToPubkey[pubKeyHash]), " - udid: ", logUdid(pendingDepositRoot));
+        console.log(
+            "VerifyDeposit(): \t\t\t", (hashToPubkey[pubKeyHash]).logPubkey(), " - udid: ", (pendingDepositRoot).logUdid()
+        );
     }
 
     /// @notice Snap the balances of the strategy.
@@ -342,9 +340,8 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // If no validator match the criteria, skip the withdrawal.
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
-            logAssume(
-                false, "ValidatorWithdrawal(): \t all validators are either not active or exiting with pending deposits"
-            );
+            string("ValidatorWithdrawal(): \t all validators are either not active or exiting with pending deposits")
+                .logAssume();
         }
 
         // Main call: validatorWithdrawal
@@ -357,8 +354,8 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log(
             "ValidatorWithdrawal(): \t\t %18e ETH - pubkey: %s, udid: %s",
             uint256(amountToWithdraw) * 1 gwei,
-            logPubkey(pubkey),
-            logUdid(udid)
+            pubkey.logPubkey(),
+            udid.logUdid()
         );
     }
 
@@ -395,7 +392,7 @@ abstract contract TargetFunctions is FuzzerBase {
 
         console.log(
             "ProcessDeposit(): \t\t\t",
-            logUdid(deposits[0].udid),
+            deposits[0].udid.logUdid(),
             string("remain: ").concat(vm.toString(deposits.length - 1))
         );
     }
@@ -410,7 +407,7 @@ abstract contract TargetFunctions is FuzzerBase {
         vm.assume(!pubkey.eq(LibConstant.NOT_FOUND_BYTES));
 
         // Log the activation.
-        console.log("ActivateValidators(): \t\t", logPubkey(pubkey));
+        console.log("ActivateValidators(): \t\t", pubkey.logPubkey());
     }
 
     /// @notice Remove a SSV validator.
@@ -435,7 +432,7 @@ abstract contract TargetFunctions is FuzzerBase {
         strategy.removeSsvValidator(pubkey, new uint64[](0), emptyCluster);
 
         // Log the removal.
-        console.log("RemoveSsvValidator(): \t\t", logPubkey(pubkey));
+        console.log("RemoveSsvValidator(): \t\t", pubkey.logPubkey());
     }
 
     /// @notice Process a sweep of validators in the beacon chain.
@@ -466,10 +463,10 @@ abstract contract TargetFunctions is FuzzerBase {
         (bytes memory pubkey, bytes32 udid, uint256 amount) = beaconChain.processWithdraw();
 
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
-            console.log("ProcessWithdraw(): \t\t\t udid: %s thrown as not possible to process", logUdid(udid));
+            console.log("ProcessWithdraw(): \t\t\t udid: %s thrown as not possible to process", udid.logUdid());
         }
 
-        console.log("ProcessWithdraw(): \t\t\t%18e ETH pubkey: %s, udid: %s", amount, logPubkey(pubkey), logUdid(udid));
+        console.log("ProcessWithdraw(): \t\t\t%18e ETH pubkey: %s, udid: %s", amount, pubkey.logPubkey(), udid.logUdid());
     }
 
     /// @notice Deactivate validators in the beacon chain.
@@ -485,7 +482,7 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log(
             "DeactivateValidators(): \t\t deactivated %d validators: %s",
             counter,
-            arrayIntoString(deactivatedPubkeys, counter)
+            deactivatedPubkeys.arrayIntoString(counter)
         );
     }
 
@@ -499,7 +496,7 @@ abstract contract TargetFunctions is FuzzerBase {
         (bytes[] memory receivers, uint256 counter, uint256 amount) = beaconChain.simulateRewards();
 
         console.log(
-            "SimulateRewards(): \t\t\t %18e ETH rewards distributed to: %s", amount, arrayIntoString(receivers, counter)
+            "SimulateRewards(): \t\t\t %18e ETH rewards distributed to: %s", amount, receivers.arrayIntoString(counter)
         );
     }
 
@@ -521,7 +518,7 @@ abstract contract TargetFunctions is FuzzerBase {
         // Main call: slash
         beaconChain.slash(validator.pubkey, amount);
 
-        console.log("Slash():    \t\t\t\t %18e ETH - pubkey: %s", amount, logPubkey(validator.pubkey));
+        console.log("Slash():    \t\t\t\t %18e ETH - pubkey: %s", amount, validator.pubkey.logPubkey());
     }
 
     ////////////////////////////////////////////////////

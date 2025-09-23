@@ -1,31 +1,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-// Test imports
-import { Setup } from "test/Setup.sol";
-
 // Helpers
+import { Vm } from "@forge-std/Vm.sol";
 import { console } from "@forge-std/console.sol";
 import { LibString } from "@solady/utils/LibString.sol";
 
-/// @title FuzzerBase
-/// @notice Abstract base contract for fuzzing tests that hold all variable and helpers.
-/// @dev    This contract is inherited by concrete fuzzing contracts to share common setup and utilities.
-
-abstract contract FuzzerBase is Setup {
+library LibLogger {
     using LibString for string;
 
-    ////////////////////////////////////////////////////
-    /// --- HELPERS
-    ////////////////////////////////////////////////////
-
-    /// @notice Returns the minimum of two uint256 values.
-    /// @param a First uint256 value.
-    /// @param b Second uint256 value.
-    /// @return The minimum of the two values.
-    function min(uint256 a, uint256 b) public pure returns (uint256) {
-        return a < b ? a : b;
-    }
+    Vm constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     /// @notice Converts an array of bytes to a string representation.
     /// @param array The array of bytes to convert.
@@ -41,15 +25,13 @@ abstract contract FuzzerBase is Setup {
         return result;
     }
 
-    ////////////////////////////////////////////////////
-    /// --- LOGGER
-    ////////////////////////////////////////////////////
     /// @notice Logs a message if a condition is false, then assumes the condition is true for fuzzing.
-    /// @param condition The condition to check.
     /// @param message The message to log if the condition is false.
-    function logAssume(bool condition, string memory message) public pure {
-        if (!condition) console.log(message);
-        vm.assume(condition);
+    function logAssume(
+        string memory message
+    ) public pure {
+        console.log(message);
+        vm.assume(false);
     }
 
     /// @notice Logs a truncated version of a public key for easier readability.
@@ -60,6 +42,8 @@ abstract contract FuzzerBase is Setup {
         return vm.toString(pubkey).slice(0, 6);
     }
 
+    /// @notice Logs a truncated version of a UDID for easier readability.
+    /// @param udid The UDID to log.
     function logUdid(
         bytes32 udid
     ) public pure returns (string memory) {
