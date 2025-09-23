@@ -8,6 +8,8 @@ import { FuzzerBase } from "test/FuzzerBase.sol";
 import { console } from "@forge-std/console.sol";
 import { LibBytes } from "@solady/utils/LibBytes.sol";
 import { LibString } from "@solady/utils/LibString.sol";
+import { LibBeacon } from "test/libraries/LibBeacon.sol";
+import { LibStrategy } from "test/libraries/LibStrategy.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
 import { LibConstant } from "./libraries/LibConstant.sol";
 import { LibValidator } from "test/libraries/LibValidator.sol";
@@ -18,6 +20,7 @@ import { BeaconChain } from "src/BeaconChain.sol";
 
 // Target contracts
 import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
 
 /// @title TargetFunctions
 /// @notice TargetFunctions contract for tests, containing the target functions that should be tested.
@@ -55,9 +58,11 @@ abstract contract TargetFunctions is FuzzerBase {
 
     using LibBytes for bytes;
     using LibString for string;
+    using LibBeacon for uint64;
     using SafeCastLib for uint256;
     using LibValidator for bytes;
     using FixedPointMathLib for uint256;
+    using LibStrategy for CompoundingStakingSSVStrategy;
 
     ////////////////////////////////////////////////////
     /// --- SETUP
@@ -110,8 +115,11 @@ abstract contract TargetFunctions is FuzzerBase {
     function handler_registerSsvValidator(
         uint8 index
     ) public {
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](1);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.NON_REGISTERED;
         // Pick a random validator that have NOT_REGISTERED status.
-        bytes memory pubkey = validatorWithStatus(CompoundingValidatorManager.ValidatorState.NON_REGISTERED, index);
+        (bytes memory pubkey,) = strategy.validatorWithStatus(expectedStatus, validators, index);
         // If all validators are already registered, skip the registration.
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
             logAssume(false, "RegisterSsvValidator(): \t\t all validators are already registered");
@@ -142,13 +150,14 @@ abstract contract TargetFunctions is FuzzerBase {
         vm.assume(!strategy.firstDeposit()); // Ensure not 2 deposits for 2 different validators that are not verified.
         vm.assume(strategy.depositListLength() < LibConstant.MAX_DEPOSITS); // Ensure we don't exceed max deposits.
 
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](3);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.REGISTERED;
+        expectedStatus[1] = CompoundingValidatorManager.ValidatorState.VERIFIED;
+        expectedStatus[2] = CompoundingValidatorManager.ValidatorState.ACTIVE;
         // Pick a random validator that have either REGISTERED, VERIFIED or ACTIVE status.
-        (bytes memory pubkey, CompoundingValidatorManager.ValidatorState status) = validatorWithStatus(
-            CompoundingValidatorManager.ValidatorState.REGISTERED,
-            CompoundingValidatorManager.ValidatorState.VERIFIED,
-            CompoundingValidatorManager.ValidatorState.ACTIVE,
-            index
-        );
+        (bytes memory pubkey, CompoundingValidatorManager.ValidatorState status) =
+            strategy.validatorWithStatus(expectedStatus, validators, index);
         // If no validator match the criteria, skip the staking.
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
             logAssume(false, "StakeEth(): \t\t\t\t all validators are already staked");
@@ -201,8 +210,11 @@ abstract contract TargetFunctions is FuzzerBase {
     function handler_verifyValidator(
         uint8 index
     ) public {
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](1);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.STAKED;
         // Pick a random validator that have STAKED status.
-        bytes memory pubkey = existingValidatorWithStatus(CompoundingValidatorManager.ValidatorState.STAKED, index);
+        (bytes memory pubkey,) = strategy.validatorWithStatusOnBeaconChain(beaconChain, expectedStatus, validators, index);
         // If no validator match the criteria, skip the verification.
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
             logAssume(false, "VerifyValidator(): \t\t all validators are already verified");
@@ -235,14 +247,7 @@ abstract contract TargetFunctions is FuzzerBase {
         validStates[1] = CompoundingValidatorManager.ValidatorState.ACTIVE;
         validStates[2] = CompoundingValidatorManager.ValidatorState.EXITED;
 
-        (bytes32 pendingDepositRoot, bytes32 pubKeyHash, uint64 slot) = depositAndValidatorWithStatus(
-            ExpectedStatus({
-                beaconDepositStatus: BeaconChain.DepositStatus.PROCESSED,
-                strategyDepositStatus: CompoundingValidatorManager.DepositStatus.PENDING,
-                validatorStatusArr: validStates
-            }),
-            index
-        );
+        (bytes32 pendingDepositRoot, bytes32 pubKeyHash, uint64 slot) = strategy.depositToVerify(beaconChain, index);
         // If no deposit match the criteria, skip the verification.
         if (pendingDepositRoot == LibConstant.NOT_FOUND_BYTES32) {
             logAssume(false, "VerifyDeposit(): \t\t all deposits are already verified");
@@ -250,7 +255,7 @@ abstract contract TargetFunctions is FuzzerBase {
 
         (, uint64 snapTimestamp,) = strategy.snappedBalance();
         uint64 depositProcessedSlot = slot + 1;
-        vm.assume(snapTimestamp == 0 || calcNextBlockTimestamp(depositProcessedSlot) <= snapTimestamp);
+        vm.assume(snapTimestamp == 0 || depositProcessedSlot.calcNextBlockTimestamp() <= snapTimestamp);
         // Main call: verifyDeposit
         strategy.verifyDeposit({
             pendingDepositRoot: pendingDepositRoot,
@@ -333,7 +338,7 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // Pick a random validator that have either ACTIVE or EXITING status.
         // If the validator is EXITING and fullWithdraw requested, ensure there is no pending deposit.
-        (bytes memory pubkey,) = pleaseFindBetterName(fullWithdraw, index);
+        (bytes memory pubkey,) = strategy.validatorWithStatusNoPending(validators, fullWithdraw, index);
 
         // If no validator match the criteria, skip the withdrawal.
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
@@ -415,13 +420,13 @@ abstract contract TargetFunctions is FuzzerBase {
     function handler_removeSsvValidator(
         uint8 index
     ) public {
-        // Pick a random validator that have either REGISTERED, EXITED or INVALID status.
-        (bytes memory pubkey,) = validatorWithStatus(
-            CompoundingValidatorManager.ValidatorState.REGISTERED,
-            CompoundingValidatorManager.ValidatorState.EXITED,
-            CompoundingValidatorManager.ValidatorState.INVALID,
-            index
-        );
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](3);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.REGISTERED;
+        expectedStatus[1] = CompoundingValidatorManager.ValidatorState.EXITED;
+        expectedStatus[2] = CompoundingValidatorManager.ValidatorState.INVALID;
+        // Pick a random validator that have either REGISTERED, EXITED or INVALID status and that exist on the beacon chain.
+        (bytes memory pubkey,) = strategy.validatorWithStatusOnBeaconChain(beaconChain, expectedStatus, validators, index);
         // If no validator match the criteria, skip the removal.
         if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) vm.assume(false);
 
