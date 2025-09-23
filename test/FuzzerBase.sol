@@ -33,13 +33,6 @@ abstract contract FuzzerBase is Setup {
     ////////////////////////////////////////////////////
     /// --- HELPERS
     ////////////////////////////////////////////////////
-    /// @notice Customize probability of executing a function.
-    /// @param random Random number provided by the fuzzer.
-    /// @param pct Probability percentage (0-100) to execute the function.
-    modifier probability(uint256 random, uint256 pct) {
-        vm.assume(random % 100 < pct);
-        _;
-    }
 
     /// @notice Returns the minimum of two uint256 values.
     /// @param a First uint256 value.

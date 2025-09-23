@@ -101,15 +101,15 @@ abstract contract TargetFunctions is FuzzerBase {
     }
 
     /// @notice Register a SSV validator.
-    /// @param random Random value used to reduce the probability of this function being called. Not limited because used for
-    /// randomness.
     /// @param index Index of the validator to register, limited to uint8 because strategy can only process 48 validators at
     /// a time. uint8 ≈ 255, so this is more than enough for 48 validators.
     /// @dev Reduce probability of this function being successfully called to 40% to avoid having too many registered. As
     /// this function is easy to pass (because low amount of assume), it tends to be called a lot more than other handlers,
     /// which results in having too many registered validators and no other calls.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_registerSsvValidator(uint256 random, uint8 index) public probability(random, 40) {
+    function handler_registerSsvValidator(
+        uint8 index
+    ) public {
         // Pick a random validator that have NOT_REGISTERED status.
         bytes memory pubkey = validatorWithStatus(CompoundingValidatorManager.ValidatorState.NON_REGISTERED, index);
         // If all validators are already registered, skip the registration.
@@ -267,12 +267,8 @@ abstract contract TargetFunctions is FuzzerBase {
     }
 
     /// @notice Snap the balances of the strategy.
-    /// @param random Index used to reduce the probability of this function being called, no limit because used for
-    /// randomness.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_snapBalances(
-        uint256 random
-    ) public probability(random, 20) {
+    function handler_snapBalances() public {
         (, uint64 snapTimestamp,) = strategy.snappedBalance();
 
         // Prevent calling snapBalances too often.
@@ -364,7 +360,9 @@ abstract contract TargetFunctions is FuzzerBase {
     /// @notice Withdraw from the strategy to a recipient.
     /// @param amount Amount of ETH to withdraw, limited to uint80 because it will be bound to the strategy balance.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_withdraw(uint80 amount, uint256 random) public probability(random, 20) {
+    function handler_withdraw(
+        uint80 amount
+    ) public {
         uint256 balance = weth.balanceOf(address(strategy)) + address(strategy).balance;
         vm.assume(balance > 1); // Ensure there is at least 1 wei to withdraw.
 
@@ -413,10 +411,10 @@ abstract contract TargetFunctions is FuzzerBase {
     /// @notice Remove a SSV validator.
     /// @param index Index in the list of registered SSV validators to remove, limited to uint8 because we should have
     /// more than 255 ssv validators registered, really low risk of overflow.
-    /// @param random Random value used to reduce the probability of this function being called. Not limited because used for
-    /// randomness.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_removeSsvValidator(uint8 index, uint256 random) public probability(random, 20) {
+    function handler_removeSsvValidator(
+        uint8 index
+    ) public {
         // Pick a random validator that have either REGISTERED, EXITED or INVALID status.
         (bytes memory pubkey,) = validatorWithStatus(
             CompoundingValidatorManager.ValidatorState.REGISTERED,
@@ -525,11 +523,11 @@ abstract contract TargetFunctions is FuzzerBase {
     /// --- SYSTEM HANDLERS
     ////////////////////////////////////////////////////
     /// @notice Simulate a time jump in the system.
-    /// @param random Index used to reduce the probability of this function being called. Not limited because used for
-    /// randomness.
     /// @param secondsToJump Number of seconds to jump, limited to uint32 to avoid too big jumps.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_timejump(uint256 random, uint32 secondsToJump) public probability(random, 10) {
+    function handler_timejump(
+        uint32 secondsToJump
+    ) public {
         // Minimum jump of 12 seconds to ensure we replicate execution block time.
         secondsToJump = _bound(secondsToJump, 12, 1 days).toUint32();
         skip(secondsToJump);
