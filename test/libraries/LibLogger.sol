@@ -9,6 +9,7 @@ import { LibString } from "@solady/utils/LibString.sol";
 library LibLogger {
     using LibString for string;
 
+    // forge-lint: disable-next-line(screaming-snake-case-const)
     Vm constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     /// @notice Converts an array of bytes to a string representation.

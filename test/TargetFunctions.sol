@@ -447,7 +447,7 @@ abstract contract TargetFunctions is Setup {
         vm.assume(validatorsCount > 0); // Ensure there is at least one validator to process.
 
         // Bound the count to process between 1 and the number of validators.
-        count = _bound(count, 1, uint8(validatorsCount)).toUint8();
+        count = _bound(count, 1, validatorsCount.toUint8()).toUint8();
 
         // Main call: processSweep
         beaconChain.processSweep();

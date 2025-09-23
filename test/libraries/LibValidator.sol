@@ -40,6 +40,8 @@ library LibValidator {
     function getIndexFromPubkey(
         bytes memory pubkey
     ) external pure returns (uint16) {
+        // The crop of the bytes into bytes2 is made on purpose, to extract the first 2 bytes.
+        // forge-lint: disable-next-line(unsafe-typecast)
         return uint16(bytes2(pubkey));
     }
 }

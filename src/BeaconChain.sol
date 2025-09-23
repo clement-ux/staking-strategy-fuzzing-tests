@@ -217,9 +217,10 @@ contract BeaconChain {
                 amount: amount,
                 timestamp: uint64(block.timestamp),
                 owner: requester,
-                udid: bytes32(abi.encodePacked(uint16(withdrawCounter++), bytes30(0)))
+                udid: bytes32(abi.encodePacked(withdrawCounter.toUint16(), bytes30(0)))
             })
         );
+        withdrawCounter++;
         emit BeaconChain___Withdraw(pubkey, amount);
     }
 
