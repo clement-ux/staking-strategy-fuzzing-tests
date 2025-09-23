@@ -25,24 +25,30 @@ contract FuzzerFoundry is Properties {
 
         // Add selectors
         bytes4[] memory selectors = new bytes4[](18);
+
+        // Strategy handlers
         selectors[0] = this.handler_deposit.selector;
-        selectors[1] = this.handler_registerSsvValidator.selector;
+        selectors[1] = this.handler_withdraw.selector;
         selectors[2] = this.handler_stakeEth.selector;
-        selectors[3] = this.handler_verifyValidator.selector;
-        selectors[4] = this.handler_processDeposit.selector; // beacon chain
-        selectors[5] = this.handler_verifyDeposit.selector;
-        selectors[6] = this.handler_activateValidators.selector; // beacon chain
-        selectors[7] = this.handler_snapBalances.selector; // beacon chain
-        selectors[8] = this.handler_timejump.selector; // system
-        selectors[9] = this.handler_verifyBalances.selector;
-        selectors[10] = this.handler_validatorWithdrawal.selector;
-        selectors[11] = this.handler_withdraw.selector;
-        selectors[12] = this.handler_removeSsvValidator.selector;
-        selectors[13] = this.handler_processSweep.selector; // beacon chain
-        selectors[14] = this.handler_processWithdraw.selector; // beacon chain
-        selectors[15] = this.handler_deactivateValidators.selector; // beacon chain
-        selectors[16] = this.handler_simulateRewards.selector; // beacon chain
-        selectors[17] = this.handler_slash.selector; // beacon chain
+        selectors[3] = this.handler_verifyDeposit.selector;
+        selectors[4] = this.handler_verifyBalances.selector;
+        selectors[5] = this.handler_verifyValidator.selector;
+        selectors[6] = this.handler_registerSsvValidator.selector;
+        selectors[7] = this.handler_validatorWithdrawal.selector;
+        selectors[8] = this.handler_removeSsvValidator.selector;
+
+        // Beacon chain handlers
+        selectors[9] = this.handler_processDeposit.selector;
+        selectors[10] = this.handler_processWithdraw.selector;
+        selectors[11] = this.handler_processSweep.selector;
+        selectors[12] = this.handler_activateValidators.selector;
+        selectors[13] = this.handler_deactivateValidators.selector;
+        selectors[14] = this.handler_snapBalances.selector;
+        selectors[15] = this.handler_simulateRewards.selector;
+        selectors[16] = this.handler_slash.selector;
+
+        // System handlers
+        selectors[17] = this.handler_timejump.selector;
 
         // Target selectors
         targetSelector(FuzzSelector({ addr: address(this), selectors: selectors }));
