@@ -8,11 +8,13 @@ import { RewardDistributor } from "./RewardDistributor.sol";
 // Helper
 import { LibBytes } from "@solady/utils/LibBytes.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
+import { LibValidator } from "../test/libraries/LibValidator.sol";
 import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
 
 contract BeaconChain {
     using LibBytes for bytes;
     using SafeCastLib for uint256;
+    using LibValidator for bytes;
     using FixedPointMathLib for uint256;
 
     ////////////////////////////////////////////////////
@@ -126,7 +128,7 @@ contract BeaconChain {
         // recreate the pendingDepositRoot, that will be used as unique deposit ID
         // signature is the value responsible to make the deposit unique
         bytes32 udid = beaconProofs.merkleizePendingDeposit({
-            pubKeyHash: beaconProofs.hashPubKey(pubkey),
+            pubKeyHash: pubkey.hashPubkey(),
             withdrawalCredentials: withdrawalCredentials,
             amountGwei: (msg.value / 1 gwei).toUint64(),
             signature: signature,

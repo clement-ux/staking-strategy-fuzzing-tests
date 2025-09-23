@@ -32,7 +32,9 @@ contract Base is Test {
     ////////////////////////////////////////////////////
     /// --- CONSTANTS & IMMUTABLES
     ////////////////////////////////////////////////////
+    uint16 public constant MAX_VALIDATORS = 21;
     uint64 public constant GENESIS_TIMESTAMP = 1_606_824_023;
+    uint256 public constant MAX_VERIFIED_VALIDATORS = 48;
     address public constant BEACON_ROOTS_ADDRESS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
     address public constant DEPOSIT_CONTRACT_ADDRESS = 0x00000000219ab540356cBB839Cbe05303d7705Fa;
     address public constant WITHDRAWAL_REQUEST_ADDRESS = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
@@ -47,9 +49,12 @@ contract Base is Test {
     address public governor = makeAddr("governor");
     address public operator = makeAddr("operator");
 
+    // Validators
+    bytes[] public validators;
+    mapping(bytes32 pubkeyHash => bytes pubkey) public hashToPubkey;
+
     // Mock
     address public oethVault = makeAddr("oethVault");
-
     Cluster public emptyCluster = Cluster(0, 0, 0, false, 0);
 
     ////////////////////////////////////////////////////

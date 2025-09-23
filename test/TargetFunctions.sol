@@ -10,6 +10,7 @@ import { LibBytes } from "@solady/utils/LibBytes.sol";
 import { LibString } from "@solady/utils/LibString.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
 import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
+import { LibValidator } from "test/libraries/LibValidator.sol";
 
 // Beacon
 import { BeaconChain } from "src/BeaconChain.sol";
@@ -54,6 +55,7 @@ abstract contract TargetFunctions is FuzzerBase {
     using LibBytes for bytes;
     using LibString for string;
     using SafeCastLib for uint256;
+    using LibValidator for bytes;
     using FixedPointMathLib for uint256;
 
     ////////////////////////////////////////////////////
@@ -164,7 +166,7 @@ abstract contract TargetFunctions is FuzzerBase {
         }
 
         bytes32 pendingDepositRoot = beaconProofs.merkleizePendingDeposit(
-            hashPubKey(pubkey),
+            pubkey.hashPubkey(),
             abi.encodePacked(bytes1(0x02), bytes11(0), address(strategy)), // withdrawal credentials
             uint64(amountInGwei),
             abi.encodePacked(depositContract.uniqueDepositId()), // signature
@@ -204,12 +206,12 @@ abstract contract TargetFunctions is FuzzerBase {
         if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
             logAssume(false, "VerifyValidator(): \t\t all validators are already verified");
         }
-        bytes32 pubkeyHash = hashPubKey(pubkey);
+        bytes32 pubkeyHash = pubkey.hashPubkey();
 
         // Main call: verifyValidator
         strategy.verifyValidator({
             nextBlockTimestamp: 0,
-            validatorIndex: pubkeyToIndex[pubkey],
+            validatorIndex: pubkey.getIndexFromPubkey(),
             pubKeyHash: pubkeyHash,
             withdrawalAddress: address(strategy),
             validatorPubKeyProof: bytes("")

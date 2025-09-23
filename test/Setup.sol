@@ -4,6 +4,8 @@ pragma solidity 0.8.29;
 // Base
 import { Base } from "./Base.sol";
 
+import { console } from "@forge-std/console.sol";
+
 // Contract to test
 import { InitializableAbstractStrategy } from "@origin-dollar/utils/InitializableAbstractStrategy.sol";
 import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
@@ -22,7 +24,7 @@ import { DepositContract } from "../src/DepositContract.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 
 // Utils
-import { ValidatorSet } from "../src/ValidatorSet.sol";
+import { LibValidator } from "./libraries/LibValidator.sol";
 
 /// @title Setup
 /// @notice Abstract contract responsible for test environment initialization and contract deployment.
@@ -34,7 +36,10 @@ import { ValidatorSet } from "../src/ValidatorSet.sol";
 ///         5. System initialization and configuration
 ///         6. Address labeling for improved traceability
 ///         No test logic should be implemented here, only setup procedures.
-contract Setup is Base, ValidatorSet {
+contract Setup is Base {
+    using LibValidator for bytes;
+    using LibValidator for uint16;
+
     ////////////////////////////////////////////////////
     /// --- SETUP
     ////////////////////////////////////////////////////
@@ -43,7 +48,7 @@ contract Setup is Base, ValidatorSet {
         _setUpRealisticEnvironment();
 
         // 2. Create user
-        _createUsers();
+        _createUsersAndValidators();
 
         // To increase performance, we will not use fork., mocking contract instead.
         // 3. Deploy mocks.
@@ -70,9 +75,22 @@ contract Setup is Base, ValidatorSet {
     //////////////////////////////////////////////////////
     /// --- USERS
     //////////////////////////////////////////////////////
-    function _createUsers() private {
+    function _createUsersAndValidators() private {
+        // Fund users
         deal(address(alice), 1_000_000 ether);
         deal(address(bobby), 1_000_000 ether);
+
+        // Create validators and map pubkey hash to pubkey
+        for (uint16 i = 1; i <= MAX_VALIDATORS; i++) {
+            // Create a mock pubkey
+            bytes memory pubkey = i.createPubkey();
+
+            // Add to validators array
+            validators.push(pubkey);
+
+            // Map pubkey to hash to retrieve it later
+            hashToPubkey[pubkey.hashPubkey()] = pubkey;
+        }
     }
 
     //////////////////////////////////////////////////////

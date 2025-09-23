@@ -7,6 +7,7 @@ import { Setup } from "test/Setup.sol";
 // Helpers
 import { console } from "@forge-std/console.sol";
 import { LibString } from "@solady/utils/LibString.sol";
+import { LibValidator } from "test/libraries/LibValidator.sol";
 
 // Target contracts
 import { BeaconChain } from "src/BeaconChain.sol";
@@ -18,6 +19,7 @@ import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeSta
 
 abstract contract FuzzerBase is Setup {
     using LibString for string;
+    using LibValidator for bytes;
 
     ////////////////////////////////////////////////////
     /// --- CONSTANTS & IMMUTABLES
@@ -94,16 +96,16 @@ abstract contract FuzzerBase is Setup {
         CompoundingValidatorManager.ValidatorState status,
         uint256 index
     ) public view returns (bytes memory) {
-        Validator[] memory _validators = validators;
+        bytes[] memory _validators = validators;
 
         uint256 len = _validators.length;
         // Browse through all possible validators, find one that matches the criteria
         for (uint256 i = index; i < len + index; i++) {
             // Get the pubkey of the validator to check
-            bytes memory pubkey = _validators[i % len].pubkey;
+            bytes memory pubkey = _validators[i % len];
 
             // Fetch status from strategy
-            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkeyToHash[pubkey]);
+            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkey.hashPubkey());
 
             // If status matches, return the pubkey
             if (currentStatus == status) return pubkey;
@@ -122,16 +124,16 @@ abstract contract FuzzerBase is Setup {
         CompoundingValidatorManager.ValidatorState status,
         uint256 index
     ) public view returns (bytes memory) {
-        Validator[] memory _validators = validators;
+        bytes[] memory _validators = validators;
 
         uint256 len = _validators.length;
         // Browse through all possible validators, find one that matches the criteria
         for (uint256 i = index; i < len + index; i++) {
             // Get the pubkey of the validator to check
-            bytes memory pubkey = _validators[i % len].pubkey;
+            bytes memory pubkey = _validators[i % len];
 
             // Fetch status from strategy
-            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkeyToHash[pubkey]);
+            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkey.hashPubkey());
 
             // Get validator status from beacon chain
             uint256 beaconIndex = beaconChain.getValidatorIndex(pubkey);
@@ -154,16 +156,16 @@ abstract contract FuzzerBase is Setup {
         CompoundingValidatorManager.ValidatorState status2,
         uint256 index
     ) public view returns (bytes memory, CompoundingValidatorManager.ValidatorState) {
-        Validator[] memory _validators = validators;
+        bytes[] memory _validators = validators;
 
         uint256 len = _validators.length;
         // Browse through all possible validators, find one that matches the criteria
         for (uint256 i = index; i < len + index; i++) {
             // Get the pubkey of the validator to check
-            bytes memory pubkey = _validators[i % len].pubkey;
+            bytes memory pubkey = _validators[i % len];
 
             // Fetch status from strategy
-            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkeyToHash[pubkey]);
+            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkey.hashPubkey());
 
             // If status matches, return the pubkey
             if (currentStatus == status1 || currentStatus == status2) return (pubkey, currentStatus);
@@ -177,16 +179,16 @@ abstract contract FuzzerBase is Setup {
         bool fullWithdraw,
         uint256 index
     ) public view returns (bytes memory, CompoundingValidatorManager.ValidatorState) {
-        Validator[] memory _validators = validators;
+        bytes[] memory _validators = validators;
 
         uint256 len = _validators.length;
         // Browse through all possible validators, find one that matches the criteria
         for (uint256 i = index; i < len + index; i++) {
             // Get the pubkey of the validator to check
-            bytes memory pubkey = _validators[i % len].pubkey;
+            bytes memory pubkey = _validators[i % len];
 
             // Fetch status from strategy
-            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkeyToHash[pubkey]);
+            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkey.hashPubkey());
 
             // We only want ACTIVE or EXITING validators
             if (
@@ -209,7 +211,7 @@ abstract contract FuzzerBase is Setup {
                 (bytes32 pubKeyHash,,,,) = strategy.deposits(pendingDepositRoot);
 
                 // If there is a pending deposit for this validator, skip it.
-                if (pubKeyHash == pubkeyToHash[pubkey]) {
+                if (pubKeyHash == pubkey.hashPubkey()) {
                     hasPendingDeposit = true;
                     break;
                 }
@@ -234,16 +236,16 @@ abstract contract FuzzerBase is Setup {
         CompoundingValidatorManager.ValidatorState status3,
         uint256 index
     ) public view returns (bytes memory, CompoundingValidatorManager.ValidatorState) {
-        Validator[] memory _validators = validators;
+        bytes[] memory _validators = validators;
 
         uint256 len = _validators.length;
         // Browse through all possible validators, find one that matches the criteria
         for (uint256 i = index; i < len + index; i++) {
             // Get the pubkey of the validator to check
-            bytes memory pubkey = _validators[i % len].pubkey;
+            bytes memory pubkey = _validators[i % len];
 
             // Fetch status from strategy
-            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkeyToHash[pubkey]);
+            (CompoundingValidatorManager.ValidatorState currentStatus,) = strategy.validator(pubkey.hashPubkey());
 
             // If status matches, return the pubkey
             if (currentStatus == status1 || currentStatus == status2 || currentStatus == status3) {
@@ -394,7 +396,7 @@ abstract contract FuzzerBase is Setup {
     function logPubkey(
         bytes memory pubkey
     ) public pure returns (string memory) {
-        return vm.toString(pubkey).slice(0, 5);
+        return vm.toString(pubkey).slice(0, 6);
     }
 
     function logUdid(
