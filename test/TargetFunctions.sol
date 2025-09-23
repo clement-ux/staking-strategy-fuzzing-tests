@@ -64,10 +64,11 @@ abstract contract TargetFunctions is Setup {
     using LibLogger for bytes32;
     using LibString for string;
     using LibBeacon for uint64;
+    using LibBeacon for BeaconChain;
+    using LibStrategy for CompoundingStakingSSVStrategy;
     using SafeCastLib for uint256;
     using LibValidator for bytes;
     using FixedPointMathLib for uint256;
-    using LibStrategy for CompoundingStakingSSVStrategy;
 
     ////////////////////////////////////////////////////
     /// --- STRATEGY HANDLERS
@@ -490,7 +491,7 @@ abstract contract TargetFunctions is Setup {
     // forge-lint: disable-next-line(mixed-case-function)
     function handler_simulateRewards() public {
         // Ensure there is at least one active validator.
-        vm.assume(beaconHelper.countValidatorWithStatus(BeaconChain.Status.ACTIVE) > 0);
+        vm.assume(beaconChain.countActiveValidator() > 0);
 
         // Main call: simulateRewards
         (bytes[] memory receivers, uint256 counter, uint256 amount) = beaconChain.simulateRewards();
@@ -506,7 +507,7 @@ abstract contract TargetFunctions is Setup {
     /// active validators, really low risk of overflow.
     // forge-lint: disable-next-line(mixed-case-function)
     function handler_slash(uint80 amount, uint8 index) public {
-        BeaconChain.Validator memory validator = beaconHelper.findValidatorWithStatus(BeaconChain.Status.ACTIVE, index);
+        BeaconChain.Validator memory validator = beaconChain.findActiveValidator(index);
 
         // Ensure at least one active validator.
         vm.assume(!validator.pubkey.eq(LibConstant.NOT_FOUND_BYTES));

@@ -16,7 +16,6 @@ import { MockERC20 } from "../src/mock/MockERC20.sol";
 import { SSVNetwork } from "../src/SSVNetwork.sol";
 import { BeaconRoot } from "../src/BeaconRoot.sol";
 import { BeaconChain } from "../src/BeaconChain.sol";
-import { BeaconHelper } from "../src/BeaconHelper.sol";
 import { BeaconProofs } from "../src/BeaconProofs.sol";
 import { DepositContract } from "../src/DepositContract.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
@@ -99,8 +98,7 @@ contract Setup is Base {
         // First deploy BeaconChain contract
         beaconChain = new BeaconChain();
 
-        // Then deploy side contract
-        beaconHelper = new BeaconHelper(address(beaconChain));
+        // Then deploy proofs contract
         beaconProofs = new BeaconProofs(address(beaconChain));
         beaconChain.setBeaconProofs(address(beaconProofs));
 
