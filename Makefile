@@ -40,7 +40,7 @@ t:
 
 # Coverage
 coverage:
-	forge coverage --report lcov
+	forge coverage --include-libs --report lcov
 	lcov --ignore-errors unused --remove ./lcov.info -o ./lcov.info.pruned "test/*" "script/*"
 
 coverage-html:
