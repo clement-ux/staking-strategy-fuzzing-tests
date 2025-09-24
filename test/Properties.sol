@@ -68,8 +68,8 @@ abstract contract Properties is TargetFunctions {
             // Get the validator that is receiving the deposit info
             (CompoundingValidatorManager.ValidatorState state,) = strategy.validator(pubkeyHash);
 
-            // If the validator is REGISTERED, the amount must be exactly 1 gwei (i.e. 1 ETH)
-            if (state == CompoundingValidatorManager.ValidatorState.REGISTERED && amountGwei != 1 gwei) return false;
+            // If the validator is STAKED, the amount must be exactly 1 gwei (i.e. 1 ETH)
+            if (state == CompoundingValidatorManager.ValidatorState.STAKED && amountGwei != 1 gwei) return false;
         }
         return true;
     }
