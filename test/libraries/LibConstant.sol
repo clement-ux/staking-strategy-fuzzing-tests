@@ -14,7 +14,7 @@ library LibConstant {
     uint256 public constant NOT_FOUND = ~uint256(0); // type(uint256).max
     uint256 public constant MIN_DEPOSIT = 1 ether;
     uint256 public constant MAX_DEPOSITS = 12;
-    uint256 public constant ACTIVATION_AMOUNT = 32 ether;
+    uint256 public constant ACTIVATION_AMOUNT = 32.25 ether;
     uint256 public constant SNAP_BALANCES_DELAY = 35 * 12; // ~35 slots, i.e. ~7 minutes
     uint256 public constant MAX_EFFECTIVE_BALANCE = 2048 ether;
     uint256 public constant MAX_VERIFIED_VALIDATORS = 48;
