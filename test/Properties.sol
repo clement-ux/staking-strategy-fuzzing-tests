@@ -4,6 +4,20 @@ pragma solidity 0.8.29;
 // Test imports
 import { TargetFunctions } from "test/TargetFunctions.sol";
 
+// Helpers
+import { LibLogger } from "test/libraries/LibLogger.sol";
+import { LibBeacon } from "test/libraries/LibBeacon.sol";
+import { LibStrategy } from "test/libraries/LibStrategy.sol";
+import { LibConstant } from "test/libraries/LibConstant.sol";
+import { LibValidator } from "test/libraries/LibValidator.sol";
+
+// Beacon
+import { BeaconChain } from "src/BeaconChain.sol";
+
+// Target contracts
+import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+
 /// @title Properties
 /// @notice Abstract contract defining invariant properties for formal verification and fuzzing.
 /// @dev    This contract contains pure property functions that express system invariants:
@@ -16,9 +30,55 @@ abstract contract Properties is TargetFunctions {
     // ╔══════════════════════════════════════════════════════════════════════════════╗
     // ║                         ✦✦✦ INVARIANT PROPERTIES ✦✦✦                         ║
     // ╚══════════════════════════════════════════════════════════════════════════════╝
-    // [ ] ...
+    // [x] Property A: The validator mapping can only contain 1 validator with state ValidatorState.STAKED
+    // [ ] Property B: The amount of ETH in unprocessed deposits to STAKED validators (validators with unconfirmed withdrawal
+    //                  credentials) is never larger than 1 ETH
+    // [x] Property C: There can not be more than 12 unprocessed deposits
+    // [x] Property D: There shouldn’t be more than 48 verified validators.
 
-    function propertieA() public pure returns (bool) {
+    using LibLogger for bytes;
+    using LibLogger for string;
+    using LibLogger for bytes[];
+    using LibLogger for bytes32;
+    using LibBeacon for uint64;
+    using LibBeacon for BeaconChain;
+    using LibStrategy for CompoundingStakingSSVStrategy;
+    using LibValidator for bytes;
+
+    function propertyA() public view returns (bool) {
+        uint256 counter;
+        for (uint256 i; i < LibConstant.MAX_VALIDATORS; i++) {
+            bytes32 hashPubkey = validators[i].hashPubkey();
+            (CompoundingValidatorManager.ValidatorState state,) = strategy.validator(hashPubkey);
+            if (state == CompoundingValidatorManager.ValidatorState.STAKED) counter++;
+        }
+
+        return counter <= 1;
+    }
+
+    function propertyB() public view returns (bool) {
+        // Get the pending deposit
+        uint256 len = strategy.depositListLength();
+        for (uint256 i; i < len; i++) {
+            bytes32 pendingDepositRoot = strategy.depositList(i);
+
+            // Get the deposit info
+            (bytes32 pubkeyHash, uint64 amountGwei,,,) = strategy.deposits(pendingDepositRoot);
+
+            // Get the validator that is receiving the deposit info
+            (CompoundingValidatorManager.ValidatorState state,) = strategy.validator(pubkeyHash);
+
+            // If the validator is REGISTERED, the amount must be exactly 1 gwei (i.e. 1 ETH)
+            if (state == CompoundingValidatorManager.ValidatorState.REGISTERED && amountGwei != 1 gwei) return false;
+        }
         return true;
+    }
+
+    function propertyC() public view returns (bool) {
+        return strategy.depositListLength() <= LibConstant.MAX_DEPOSITS;
+    }
+
+    function propertyD() public view returns (bool) {
+        return strategy.verifiedValidatorsLength() <= LibConstant.MAX_VERIFIED_VALIDATORS;
     }
 }

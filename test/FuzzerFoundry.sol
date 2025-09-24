@@ -57,7 +57,16 @@ contract FuzzerFoundry is Properties {
         targetSender(makeAddr("FuzzerSender"));
     }
 
-    function invariantA() public pure {
-        assertTrue(propertieA(), "Invariant A failed");
+    function invariantA() public view {
+        assertTrue(propertyA(), "Invariant A failed");
+    }
+
+    function invariantB() public view {
+        assertTrue(propertyB(), "Invariant B failed");
+    }
+
+    function invariantC() public view {
+        assertTrue(propertyC(), "Invariant C failed");
+        assertTrue(propertyD(), "Invariant D failed");
     }
 }

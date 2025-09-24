@@ -12,7 +12,7 @@ import { LibLogger } from "test/libraries/LibLogger.sol";
 import { LibBeacon } from "test/libraries/LibBeacon.sol";
 import { LibStrategy } from "test/libraries/LibStrategy.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
-import { LibConstant } from "./libraries/LibConstant.sol";
+import { LibConstant } from "test/libraries/LibConstant.sol";
 import { LibValidator } from "test/libraries/LibValidator.sol";
 import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
 
