@@ -299,20 +299,28 @@ contract BeaconChain {
     /// --- VALIDATORS MANAGEMENT FUNCTIONS
     ////////////////////////////////////////////////////
     /// @notice Activates all eligible validators.
-    function activateValidators() public {
-        activateValidators(validators.length);
+    /// @return activatedPubkeys The public keys of activated validators.
+    /// @return counter The number of validators activated.
+    function activateValidators() public returns (bytes[] memory activatedPubkeys, uint256 counter) {
+        return activateValidators(validators.length);
     }
 
     /// @notice Goes through all validators and activates those that are `DEPOSITED` and have enough ETH.
+    /// @param count The maximum number of validators to activate.
+    /// @return activatedPubkeys The public keys of activated validators.
+    /// @return counter The number of validators activated.
     function activateValidators(
         uint256 count
-    ) public {
+    ) public returns (bytes[] memory activatedPubkeys, uint256 counter) {
         uint256 len = min(validators.length, count);
+        activatedPubkeys = new bytes[](len);
         for (uint256 i; i < len; i++) {
             Validator storage validator = validators[i];
             if (validator.status == Status.DEPOSITED && validator.amount >= LibConstant.ACTIVATION_AMOUNT) {
                 validator.status = Status.ACTIVE;
                 emit BeaconChain___StatusChanged(validator.pubkey, validator.amount, Status.DEPOSITED, Status.ACTIVE);
+                activatedPubkeys[counter] = validator.pubkey;
+                counter++;
             }
         }
     }

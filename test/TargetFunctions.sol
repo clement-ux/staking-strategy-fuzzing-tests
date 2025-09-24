@@ -513,13 +513,13 @@ abstract contract TargetFunctions is Setup {
     // forge-lint: disable-next-line(mixed-case-function)
     function handler_activateValidators() public {
         // Activate the first validator that can be activated.
-        bytes memory pubkey = beaconChain.activateValidator();
+        (bytes[] memory pubkeys, uint256 counter) = beaconChain.activateValidators();
 
         // Ensure at least one validator was activated.
-        vm.assume(!pubkey.eq(LibConstant.NOT_FOUND_BYTES));
+        vm.assume(counter > 0);
 
         // Log the activation.
-        console.log("ActivateValidators(): \t\t", pubkey.logPubkey());
+        console.log("ActivateValidators(): \t\tactivated %d validators: %s", counter, pubkeys.arrayIntoString(counter));
     }
 
     /// @notice Remove a SSV validator.
@@ -610,6 +610,7 @@ abstract contract TargetFunctions is Setup {
         console.log(
             "SimulateRewards(): \t\t\t %18e ETH rewards distributed to: %s", amount, receivers.arrayIntoString(counter)
         );
+        if (beaconChain.countActiveValidator() > 4) revert();
     }
 
     /// @notice Slash a validator in the beacon chain.
