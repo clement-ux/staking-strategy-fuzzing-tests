@@ -48,7 +48,13 @@ contract BeaconProofs {
     /// @notice Verify that a validator with the given index and withdrawal address corresponds to the given pubKeyHash
     /// Ensure the withdrawal address matches the credentials, reading from the deposit queue or the active validators in
     /// the BeaconChain.
-    function verifyValidator(bytes32, bytes32, bytes memory, uint40 validatorIndex, address withdrawalAddress) public view {
+    function verifyValidator(
+        bytes32,
+        bytes32,
+        bytes memory,
+        uint40 validatorIndex,
+        bytes32 withdrawalCredentials
+    ) public view {
         bytes memory pubkey = validatorIndex.toUint16().createPubkey();
 
         // Ensure the withdrawal address matches the credentials
@@ -57,7 +63,10 @@ contract BeaconProofs {
         uint256 len = validator.length;
         for (uint256 i = 0; i < len; i++) {
             if (validator[i].pubkey.eq(pubkey)) {
-                require(validator[i].owner == withdrawalAddress, "Beacon Proofs: Invalid withdrawal address (active)");
+                require(
+                    bytes32(abi.encodePacked(bytes1(0x02), bytes11(0), validator[i].owner)) == withdrawalCredentials,
+                    "Beacon Proofs: Invalid withdrawal address (active)"
+                );
                 return;
             }
         }

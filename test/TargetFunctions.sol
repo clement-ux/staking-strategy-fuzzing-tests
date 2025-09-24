@@ -237,7 +237,7 @@ abstract contract TargetFunctions is Setup {
             nextBlockTimestamp: 0,
             validatorIndex: pubkey.getIndexFromPubkey(),
             pubKeyHash: pubkeyHash,
-            withdrawalAddress: withdrawalAddress,
+            withdrawalCredentials: bytes32(abi.encodePacked(bytes1(0x02), bytes11(0), withdrawalAddress)),
             validatorPubKeyProof: bytes("")
         });
 
