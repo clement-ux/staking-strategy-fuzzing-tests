@@ -260,11 +260,6 @@ abstract contract TargetFunctions is Setup {
         // Pick a random deposit that have PENDING status
         // + is linked to a validator with either VERIFIED, ACTIVE or EXITED
         // + the deposit must be PROCESSED in the beacon chain.
-        CompoundingValidatorManager.ValidatorState[] memory validStates = new CompoundingValidatorManager.ValidatorState[](3);
-        validStates[0] = CompoundingValidatorManager.ValidatorState.VERIFIED;
-        validStates[1] = CompoundingValidatorManager.ValidatorState.ACTIVE;
-        validStates[2] = CompoundingValidatorManager.ValidatorState.EXITED;
-
         (bytes32 pendingDepositRoot, bytes32 pubKeyHash, uint64 slot) = strategy.depositToVerify(beaconChain, index);
         // If no deposit match the criteria, skip the verification.
         if (pendingDepositRoot == LibConstant.NOT_FOUND_BYTES32) {
