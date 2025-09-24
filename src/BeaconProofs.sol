@@ -3,13 +3,18 @@ pragma solidity 0.8.29;
 
 // Utils
 import { LibBytes } from "@solady/utils/LibBytes.sol";
+import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
+import { LibValidator } from "../test/libraries/LibValidator.sol";
 
 // Contracts
 import { BeaconChain } from "./BeaconChain.sol";
-import { ValidatorSet } from "./ValidatorSet.sol";
 
-contract BeaconProofs is ValidatorSet {
+contract BeaconProofs {
     using LibBytes for bytes;
+    using SafeCastLib for uint40;
+    using SafeCastLib for uint256;
+    using LibValidator for bytes;
+    using LibValidator for uint16;
 
     ////////////////////////////////////////////////////
     /// --- STORAGE
@@ -41,29 +46,27 @@ contract BeaconProofs is ValidatorSet {
     }
 
     /// @notice Verify that a validator with the given index and withdrawal address corresponds to the given pubKeyHash
-    /// For this, we need to:
-    /// 1. Ensure the pubkey matches the index, reading from the ValidatorSet.
-    /// 2. Ensure the withdrawal address matches the credentials, reading from the deposit queue or the active validators in
+    /// Ensure the withdrawal address matches the credentials, reading from the deposit queue or the active validators in
     /// the BeaconChain.
     function verifyValidator(
         bytes32,
-        bytes32 pubKeyHash,
+        bytes32,
         bytes memory,
         uint40 validatorIndex,
-        address withdrawalAddress
+        bytes32 withdrawalCredentials
     ) public view {
-        bytes memory pubkey = hashToPubkey[pubKeyHash];
+        bytes memory pubkey = validatorIndex.toUint16().createPubkey();
 
-        // First ensure the pubkey matches the index
-        require(pubkeyToIndex[pubkey] == validatorIndex, "Beacon Proofs: Invalid validator index");
-
-        // Second, ensure the withdrawal address matches the credentials
+        // Ensure the withdrawal address matches the credentials
         // Browse the active validators
         BeaconChain.Validator[] memory validator = beaconChain.getValidators();
         uint256 len = validator.length;
         for (uint256 i = 0; i < len; i++) {
             if (validator[i].pubkey.eq(pubkey)) {
-                require(validator[i].owner == withdrawalAddress, "Beacon Proofs: Invalid withdrawal address (active)");
+                require(
+                    bytes32(abi.encodePacked(bytes1(0x02), bytes11(0), validator[i].owner)) == withdrawalCredentials,
+                    "Beacon Proofs: Invalid withdrawal address (active)"
+                );
                 return;
             }
         }
@@ -101,7 +104,7 @@ contract BeaconProofs is ValidatorSet {
     /// @notice Get the balance of the validator from the BeaconChain contract
     function verifyValidatorBalance(bytes32, bytes32, bytes calldata, uint40 validatorIndex) public view returns (uint256) {
         // Get the validator pubkey from the index
-        bytes memory pubkey = indexToPubkey[validatorIndex];
+        bytes memory pubkey = validatorIndex.toUint16().createPubkey();
 
         // Get validator index in the `validators` array of the BeaconChain
         uint256 validatorArrayIndex = beaconChain.getValidatorIndex(pubkey);

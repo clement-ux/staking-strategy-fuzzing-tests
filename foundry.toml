@@ -52,7 +52,7 @@ max_assume_rejects = 10_000
 forge-std = "1.9.7"
 solmate = "6.8.0"
 solady = "0.1.23"
-"origin-dollar" = { version = "1.0.0", git = "git@github.com:OriginProtocol/origin-dollar.git", rev = "546c47f2a2fa91acc2c72466476a149163dfa99b" }
+"origin-dollar" = { version = "1.0.0", git = "git@github.com:OriginProtocol/origin-dollar.git", rev = "0528675dcc0a2a6b773baf3d310b062a804bda7d" }
 "openzeppelin-contracts-4.4.2" = { version = "4.4.2", git = "git@github.com:OpenZeppelin/openzeppelin-contracts.git", rev = "b53c43242fc9c0e435b66178c3847c4a1b417cc1" }
 
 

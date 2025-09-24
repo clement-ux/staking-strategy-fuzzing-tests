@@ -2,13 +2,18 @@
 pragma solidity 0.8.29;
 
 // Test imports
-import { FuzzerBase } from "test/FuzzerBase.sol";
+import { Setup } from "test/Setup.sol";
 
 // Helpers
 import { console } from "@forge-std/console.sol";
 import { LibBytes } from "@solady/utils/LibBytes.sol";
 import { LibString } from "@solady/utils/LibString.sol";
+import { LibLogger } from "test/libraries/LibLogger.sol";
+import { LibBeacon } from "test/libraries/LibBeacon.sol";
+import { LibStrategy } from "test/libraries/LibStrategy.sol";
 import { SafeCastLib } from "@solady/utils/SafeCastLib.sol";
+import { LibConstant } from "./libraries/LibConstant.sol";
+import { LibValidator } from "test/libraries/LibValidator.sol";
 import { FixedPointMathLib } from "@solady/utils/FixedPointMathLib.sol";
 
 // Beacon
@@ -16,11 +21,12 @@ import { BeaconChain } from "src/BeaconChain.sol";
 
 // Target contracts
 import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+import { CompoundingStakingSSVStrategy } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
 
 /// @title TargetFunctions
 /// @notice TargetFunctions contract for tests, containing the target functions that should be tested.
 ///         This is the entry point with the contract we are testing. Ideally, it should never revert.
-abstract contract TargetFunctions is FuzzerBase {
+abstract contract TargetFunctions is Setup {
     // ╔══════════════════════════════════════════════════════════════════════════════╗
     // ║                           ✦✦✦ TARGET FUNCTIONS ✦✦✦                           ║
     // ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -52,18 +58,17 @@ abstract contract TargetFunctions is FuzzerBase {
     // ------------------------
 
     using LibBytes for bytes;
+    using LibLogger for bytes;
+    using LibLogger for string;
+    using LibLogger for bytes[];
+    using LibLogger for bytes32;
     using LibString for string;
+    using LibBeacon for uint64;
+    using LibBeacon for BeaconChain;
+    using LibStrategy for CompoundingStakingSSVStrategy;
     using SafeCastLib for uint256;
+    using LibValidator for bytes;
     using FixedPointMathLib for uint256;
-
-    ////////////////////////////////////////////////////
-    /// --- SETUP
-    ////////////////////////////////////////////////////
-    function setUp() public virtual override {
-        super.setUp();
-
-        // Gives a little boost at the start, to get more relevant situations right away:
-    }
 
     ////////////////////////////////////////////////////
     /// --- STRATEGY HANDLERS
@@ -98,20 +103,23 @@ abstract contract TargetFunctions is FuzzerBase {
     }
 
     /// @notice Register a SSV validator.
-    /// @param random Random value used to reduce the probability of this function being called. Not limited because used for
-    /// randomness.
     /// @param index Index of the validator to register, limited to uint8 because strategy can only process 48 validators at
     /// a time. uint8 ≈ 255, so this is more than enough for 48 validators.
     /// @dev Reduce probability of this function being successfully called to 40% to avoid having too many registered. As
     /// this function is easy to pass (because low amount of assume), it tends to be called a lot more than other handlers,
     /// which results in having too many registered validators and no other calls.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_registerSsvValidator(uint256 random, uint8 index) public probability(random, 40) {
+    function handler_registerSsvValidator(
+        uint8 index
+    ) public {
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](1);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.NON_REGISTERED;
         // Pick a random validator that have NOT_REGISTERED status.
-        bytes memory pubkey = validatorWithStatus(CompoundingValidatorManager.ValidatorState.NON_REGISTERED, index);
+        (bytes memory pubkey,) = strategy.validatorWithStatus(expectedStatus, validators, index);
         // If all validators are already registered, skip the registration.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
-            logAssume(false, "RegisterSsvValidator(): \t\t all validators are already registered");
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
+            string("RegisterSsvValidator(): \t\t all validators are already registered").logAssume();
         }
 
         // Main call: registerSsvValidator
@@ -119,7 +127,7 @@ abstract contract TargetFunctions is FuzzerBase {
         strategy.registerSsvValidator(pubkey, new uint64[](0), bytes(""), 0, emptyCluster);
 
         // Log the registration.
-        console.log("RegisterSsvValidator(): \t\t", logPubkey(pubkey));
+        console.log("RegisterSsvValidator(): \t\t", pubkey.logPubkey());
     }
 
     /// @notice Stake ETH.
@@ -137,34 +145,35 @@ abstract contract TargetFunctions is FuzzerBase {
         // Some assertions to ensure the staking can be done.
         vm.assume(balanceInGwei >= 1 gwei); // Ensure there is at least 1 gwei to stake.
         vm.assume(!strategy.firstDeposit()); // Ensure not 2 deposits for 2 different validators that are not verified.
-        vm.assume(strategy.depositListLength() < MAX_DEPOSITS); // Ensure we don't exceed max deposits.
+        vm.assume(strategy.depositListLength() < LibConstant.MAX_DEPOSITS); // Ensure we don't exceed max deposits.
 
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](3);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.REGISTERED;
+        expectedStatus[1] = CompoundingValidatorManager.ValidatorState.VERIFIED;
+        expectedStatus[2] = CompoundingValidatorManager.ValidatorState.ACTIVE;
         // Pick a random validator that have either REGISTERED, VERIFIED or ACTIVE status.
-        (bytes memory pubkey, CompoundingValidatorManager.ValidatorState status) = validatorWithStatus(
-            CompoundingValidatorManager.ValidatorState.REGISTERED,
-            CompoundingValidatorManager.ValidatorState.VERIFIED,
-            CompoundingValidatorManager.ValidatorState.ACTIVE,
-            index
-        );
+        (bytes memory pubkey, CompoundingValidatorManager.ValidatorState status) =
+            strategy.validatorWithStatus(expectedStatus, validators, index);
         // If no validator match the criteria, skip the staking.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
-            logAssume(false, "StakeEth(): \t\t\t\t all validators are already staked");
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
+            string("StakeEth(): \t\t\t\t all validators are already staked").logAssume();
         }
 
         // Bound the amount to stake between 1 ether and the minimum of 3k ether or the strategy balance.
-        amountInGwei = _bound(amountInGwei, 1 gwei, min(3000 gwei, balanceInGwei)).toUint48();
+        amountInGwei = _bound(amountInGwei, 1 gwei, balanceInGwei.min(3000 gwei)).toUint48();
 
         // If validator is REGISTERED, deposit should be exactly 1 ETH.
         if (status == CompoundingValidatorManager.ValidatorState.REGISTERED) {
             // Ensure we don't exceed max verified validators.
-            vm.assume(strategy.verifiedValidatorsLength() + 1 < MAX_VERIFIED_VALIDATORS);
+            vm.assume(strategy.verifiedValidatorsLength() + 1 < LibConstant.MAX_VERIFIED_VALIDATORS);
 
             // Convert amountInGwei to exactly 1 gwei.
             amountInGwei = 1 gwei;
         }
 
         bytes32 pendingDepositRoot = beaconProofs.merkleizePendingDeposit(
-            hashPubKey(pubkey),
+            pubkey.hashPubkey(),
             abi.encodePacked(bytes1(0x02), bytes11(0), address(strategy)), // withdrawal credentials
             uint64(amountInGwei),
             abi.encodePacked(depositContract.uniqueDepositId()), // signature
@@ -187,7 +196,7 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log(
             "StakeEth(): \t\t\t\t%18e",
             uint256(amountInGwei) * 1 gwei,
-            string("ETH to:").concat(logPubkey(pubkey)).concat(" udid: ").concat(logUdid(pendingDepositRoot))
+            string("ETH to:").concat(pubkey.logPubkey()).concat(" udid: ").concat(pendingDepositRoot.logUdid())
         );
     }
 
@@ -198,25 +207,49 @@ abstract contract TargetFunctions is FuzzerBase {
     function handler_verifyValidator(
         uint8 index
     ) public {
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](1);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.STAKED;
         // Pick a random validator that have STAKED status.
-        bytes memory pubkey = existingValidatorWithStatus(CompoundingValidatorManager.ValidatorState.STAKED, index);
+        (bytes memory pubkey,) = strategy.validatorWithStatusOnBeaconChain(beaconChain, expectedStatus, validators, index);
         // If no validator match the criteria, skip the verification.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
-            logAssume(false, "VerifyValidator(): \t\t all validators are already verified");
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
+            string("VerifyValidator(): \t\t all validators are already verified").logAssume();
         }
-        bytes32 pubkeyHash = hashPubKey(pubkey);
+        bytes32 pubkeyHash = pubkey.hashPubkey();
+
+        // Get the owner from the beacon chain instead of the strategy every time. This allow to simulate the case
+        // frontrunning.
+        address withdrawalAddress;
+        BeaconChain.Validator[] memory beaconValidators = beaconChain.getValidators();
+        for (uint256 i = 0; i < beaconValidators.length; i++) {
+            if (beaconValidators[i].pubkey.eq(pubkey)) {
+                // Ensure the owner is the strategy.
+                withdrawalAddress = beaconValidators[i].owner;
+                break;
+            }
+        }
+        // It should never happen, but just in case.
+        require(withdrawalAddress != address(0), "VerifyValidator(): Validator not found on beacon chain");
 
         // Main call: verifyValidator
         strategy.verifyValidator({
             nextBlockTimestamp: 0,
-            validatorIndex: pubkeyToIndex[pubkey],
+            validatorIndex: pubkey.getIndexFromPubkey(),
             pubKeyHash: pubkeyHash,
-            withdrawalAddress: address(strategy),
+            withdrawalCredentials: bytes32(abi.encodePacked(bytes1(0x02), bytes11(0), withdrawalAddress)),
             validatorPubKeyProof: bytes("")
         });
 
+        // If the withdrawal address is not the strategy, it means the verification was frontrun.
+        if (withdrawalAddress != address(strategy)) frontrunned = true;
+
         // Log the verification.
-        console.log("VerifyValidator(): \t\t\t", logPubkey(pubkey));
+        console.log(
+            "VerifyValidator(): \t\t\t %s - frontrunned: %s",
+            pubkey.logPubkey(),
+            withdrawalAddress != address(strategy) ? "yes" : "no"
+        );
     }
 
     /// @notice Verify a deposit.
@@ -232,22 +265,15 @@ abstract contract TargetFunctions is FuzzerBase {
         validStates[1] = CompoundingValidatorManager.ValidatorState.ACTIVE;
         validStates[2] = CompoundingValidatorManager.ValidatorState.EXITED;
 
-        (bytes32 pendingDepositRoot, bytes32 pubKeyHash, uint64 slot) = depositAndValidatorWithStatus(
-            ExpectedStatus({
-                beaconDepositStatus: BeaconChain.DepositStatus.PROCESSED,
-                strategyDepositStatus: CompoundingValidatorManager.DepositStatus.PENDING,
-                validatorStatusArr: validStates
-            }),
-            index
-        );
+        (bytes32 pendingDepositRoot, bytes32 pubKeyHash, uint64 slot) = strategy.depositToVerify(beaconChain, index);
         // If no deposit match the criteria, skip the verification.
-        if (pendingDepositRoot == bytes32(abi.encodePacked(NOT_FOUND))) {
-            logAssume(false, "VerifyDeposit(): \t\t all deposits are already verified");
+        if (pendingDepositRoot == LibConstant.NOT_FOUND_BYTES32) {
+            string("VerifyDeposit(): \t\t all deposits are already verified").logAssume();
         }
 
         (, uint64 snapTimestamp,) = strategy.snappedBalance();
         uint64 depositProcessedSlot = slot + 1;
-        vm.assume(snapTimestamp == 0 || calcNextBlockTimestamp(depositProcessedSlot) <= snapTimestamp);
+        vm.assume(snapTimestamp == 0 || depositProcessedSlot.calcNextBlockTimestamp() <= snapTimestamp);
         // Main call: verifyDeposit
         strategy.verifyDeposit({
             pendingDepositRoot: pendingDepositRoot,
@@ -260,20 +286,18 @@ abstract contract TargetFunctions is FuzzerBase {
         });
 
         // Log the verification.
-        console.log("VerifyDeposit(): \t\t\t", logPubkey(hashToPubkey[pubKeyHash]), " - udid: ", logUdid(pendingDepositRoot));
+        console.log(
+            "VerifyDeposit(): \t\t\t", (hashToPubkey[pubKeyHash]).logPubkey(), " - udid: ", (pendingDepositRoot).logUdid()
+        );
     }
 
     /// @notice Snap the balances of the strategy.
-    /// @param random Index used to reduce the probability of this function being called, no limit because used for
-    /// randomness.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_snapBalances(
-        uint256 random
-    ) public probability(random, 20) {
+    function handler_snapBalances() public {
         (, uint64 snapTimestamp,) = strategy.snappedBalance();
 
         // Prevent calling snapBalances too often.
-        vm.assume(snapTimestamp + SNAP_BALANCES_DELAY < block.timestamp);
+        vm.assume(snapTimestamp + LibConstant.SNAP_BALANCES_DELAY < block.timestamp);
 
         // Main call: snapBalances
         strategy.snapBalances();
@@ -293,12 +317,11 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // It is only possible to verifyBalances if there is a deposit processed on beacon chain, but not verifier on the
         // strategy.
-        // This is a temporary fix, as I assume this will not works once we will implement withdraw (especially with deposit
-        // to an exited validator. This assume that only the strategy can process deposits.
-        uint256 pendingDeposits = strategy.depositListLength();
-        vm.assume(pendingDeposits == beaconChain.getDepositQueueLength());
+        // Ensure that all the pending deposit on the strategy are pending on the beacon chain too.
+        vm.assume(strategy.ensureAllPendingDepositAreStillPendingOnBeaconChain(beaconChain));
 
         // Get sizes for arrays.
+        uint256 pendingDeposits = strategy.depositListLength();
         uint256 validValidators = strategy.verifiedValidatorsLength();
 
         // Main call: verifyBalances
@@ -334,13 +357,12 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // Pick a random validator that have either ACTIVE or EXITING status.
         // If the validator is EXITING and fullWithdraw requested, ensure there is no pending deposit.
-        (bytes memory pubkey,) = pleaseFindBetterName(fullWithdraw, index);
+        (bytes memory pubkey,) = strategy.validatorWithStatusNoPending(validators, fullWithdraw, index);
 
         // If no validator match the criteria, skip the withdrawal.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
-            logAssume(
-                false, "ValidatorWithdrawal(): \t all validators are either not active or exiting with pending deposits"
-            );
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
+            string("ValidatorWithdrawal(): \t all validators are either not active or exiting with pending deposits")
+                .logAssume();
         }
 
         // Main call: validatorWithdrawal
@@ -353,15 +375,17 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log(
             "ValidatorWithdrawal(): \t\t %18e ETH - pubkey: %s, udid: %s",
             uint256(amountToWithdraw) * 1 gwei,
-            logPubkey(pubkey),
-            logUdid(udid)
+            pubkey.logPubkey(),
+            udid.logUdid()
         );
     }
 
     /// @notice Withdraw from the strategy to a recipient.
     /// @param amount Amount of ETH to withdraw, limited to uint80 because it will be bound to the strategy balance.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_withdraw(uint80 amount, uint256 random) public probability(random, 20) {
+    function handler_withdraw(
+        uint80 amount
+    ) public {
         uint256 balance = weth.balanceOf(address(strategy)) + address(strategy).balance;
         vm.assume(balance > 1); // Ensure there is at least 1 wei to withdraw.
 
@@ -374,6 +398,97 @@ abstract contract TargetFunctions is FuzzerBase {
 
         // Log the withdrawal.
         console.log("Withdraw():  \t\t\t\t%18e", amount, "ETH");
+    }
+
+    /// @notice Simulate a deposit on the beacon chain to frontrun the strategy stakeEth.
+    /// @dev    Calling first directly the deposit contract to simulate the frontrun, then calling stakeEth on the strategy.
+    /// @param index Index in the list of registered SSV validators to use for the staking, limited to uint8 because we
+    /// should have more than 255 ssv validators registered, really low risk of overflow.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_frontrunDeposit(
+        uint8 index
+    ) public {
+        // Bound the amount to stake to a maximum of 3k ETH.
+        uint256 balanceInGwei = weth.balanceOf(address(strategy)) / 1 gwei;
+
+        // Some assertions to ensure the staking can be done.
+        vm.assume(balanceInGwei >= 1 gwei); // Ensure there is at least 1 gwei to stake.
+        vm.assume(!strategy.firstDeposit()); // Ensure not 2 deposits for 2 different validators that are not verified.
+        vm.assume(strategy.depositListLength() < LibConstant.MAX_DEPOSITS); // Ensure we don't exceed max deposits.
+        vm.assume(strategy.verifiedValidatorsLength() + 1 < LibConstant.MAX_VERIFIED_VALIDATORS);
+
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](1);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.REGISTERED;
+        // Pick a random validator that have either REGISTERED, VERIFIED or ACTIVE status.
+        (bytes memory pubkey,) = strategy.validatorWithStatus(expectedStatus, validators, index);
+        // If no validator match the criteria, skip the staking.
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
+            string("StakeEth(): \t\t\t\t all validators are already staked").logAssume();
+        }
+
+        // Simulate the frontrun by depositing directly on the beacon chain.
+        bytes32 frontrunPendingDepositRoot = beaconProofs.merkleizePendingDeposit(
+            pubkey.hashPubkey(),
+            abi.encodePacked(bytes1(0x02), bytes11(0), alice), // withdrawal credentials
+            uint64(1 gwei),
+            abi.encodePacked(depositContract.uniqueDepositId()), // signature
+            0 // slot
+        );
+        vm.startPrank(alice);
+        depositContract.deposit{ value: 1 ether }(
+            pubkey,
+            abi.encodePacked(bytes1(0x02), bytes11(0), alice),
+            abi.encodePacked(depositContract.uniqueDepositId()),
+            bytes32(0)
+        );
+        vm.stopPrank();
+
+        console.log(
+            "FrontrunDeposit(): \t\t\t%18e ETH to: %s udid: %s",
+            1 ether,
+            pubkey.logPubkey(),
+            frontrunPendingDepositRoot.logUdid()
+        );
+
+        // Do the normal stakeEth on the strategy.
+        bytes32 pendingDepositRoot = beaconProofs.merkleizePendingDeposit(
+            pubkey.hashPubkey(),
+            abi.encodePacked(bytes1(0x02), bytes11(0), alice), // withdrawal credentials
+            uint64(1 gwei),
+            abi.encodePacked(depositContract.uniqueDepositId()), // signature
+            0 // slot
+        );
+        // Main call: stakeEth
+        vm.startPrank(operator);
+        strategy.stakeEth({
+            validatorStakeData: CompoundingValidatorManager.ValidatorStakeData({
+                pubkey: pubkey,
+                signature: abi.encodePacked(depositContract.uniqueDepositId()),
+                depositDataRoot: bytes32(0)
+            }),
+            depositAmountGwei: 1 gwei
+        });
+        vm.stopPrank();
+
+        // Log the staking.
+        console.log(
+            "StakeEth(): \t\t\t\t%18e",
+            1 ether,
+            string("ETH to: ").concat(pubkey.logPubkey()).concat(" udid: ").concat(pendingDepositRoot.logUdid())
+        );
+    }
+
+    /// @notice Reset the firstDeposit flag on the strategy.
+    /// @dev    This function can only be called if the firstDeposit flag is true and if the last verifyValidator was
+    /// frontrunned. This function is used to be able to call stakeEth again after a frontrun.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_resetFirstDeposit() public {
+        vm.assume(strategy.firstDeposit() && frontrunned); // Ensure firstDeposit is true.
+        frontrunned = false;
+        vm.prank(governor);
+        strategy.resetFirstDeposit();
+        console.log("ResetFirstDeposit(): \t\t\t firstDeposit reset");
     }
 
     ////////////////////////////////////////////////////
@@ -389,7 +504,7 @@ abstract contract TargetFunctions is FuzzerBase {
 
         console.log(
             "ProcessDeposit(): \t\t\t",
-            logUdid(deposits[0].udid),
+            deposits[0].udid.logUdid(),
             string("remain: ").concat(vm.toString(deposits.length - 1))
         );
     }
@@ -401,35 +516,35 @@ abstract contract TargetFunctions is FuzzerBase {
         bytes memory pubkey = beaconChain.activateValidator();
 
         // Ensure at least one validator was activated.
-        vm.assume(!pubkey.eq(abi.encodePacked(NOT_FOUND)));
+        vm.assume(!pubkey.eq(LibConstant.NOT_FOUND_BYTES));
 
         // Log the activation.
-        console.log("ActivateValidators(): \t\t", logPubkey(pubkey));
+        console.log("ActivateValidators(): \t\t", pubkey.logPubkey());
     }
 
     /// @notice Remove a SSV validator.
     /// @param index Index in the list of registered SSV validators to remove, limited to uint8 because we should have
     /// more than 255 ssv validators registered, really low risk of overflow.
-    /// @param random Random value used to reduce the probability of this function being called. Not limited because used for
-    /// randomness.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_removeSsvValidator(uint8 index, uint256 random) public probability(random, 20) {
-        // Pick a random validator that have either REGISTERED, EXITED or INVALID status.
-        (bytes memory pubkey,) = validatorWithStatus(
-            CompoundingValidatorManager.ValidatorState.REGISTERED,
-            CompoundingValidatorManager.ValidatorState.EXITED,
-            CompoundingValidatorManager.ValidatorState.INVALID,
-            index
-        );
+    function handler_removeSsvValidator(
+        uint8 index
+    ) public {
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](3);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.REGISTERED;
+        expectedStatus[1] = CompoundingValidatorManager.ValidatorState.EXITED;
+        expectedStatus[2] = CompoundingValidatorManager.ValidatorState.INVALID;
+        // Pick a random validator that have either REGISTERED, EXITED or INVALID status and that exist on the beacon chain.
+        (bytes memory pubkey,) = strategy.validatorWithStatusOnBeaconChain(beaconChain, expectedStatus, validators, index);
         // If no validator match the criteria, skip the removal.
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) vm.assume(false);
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) vm.assume(false);
 
         // Main call: removeSsvValidator
         vm.prank(operator);
         strategy.removeSsvValidator(pubkey, new uint64[](0), emptyCluster);
 
         // Log the removal.
-        console.log("RemoveSsvValidator(): \t\t", logPubkey(pubkey));
+        console.log("RemoveSsvValidator(): \t\t", pubkey.logPubkey());
     }
 
     /// @notice Process a sweep of validators in the beacon chain.
@@ -443,7 +558,7 @@ abstract contract TargetFunctions is FuzzerBase {
         vm.assume(validatorsCount > 0); // Ensure there is at least one validator to process.
 
         // Bound the count to process between 1 and the number of validators.
-        count = _bound(count, 1, uint8(validatorsCount)).toUint8();
+        count = _bound(count, 1, validatorsCount.toUint8()).toUint8();
 
         // Main call: processSweep
         beaconChain.processSweep();
@@ -459,11 +574,11 @@ abstract contract TargetFunctions is FuzzerBase {
         // Main call: processWithdraw
         (bytes memory pubkey, bytes32 udid, uint256 amount) = beaconChain.processWithdraw();
 
-        if (pubkey.eq(abi.encodePacked(NOT_FOUND))) {
-            console.log("ProcessWithdraw(): \t\t\t udid: %s thrown as not possible to process", logUdid(udid));
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
+            console.log("ProcessWithdraw(): \t\t\t udid: %s thrown as not possible to process", udid.logUdid());
         }
 
-        console.log("ProcessWithdraw(): \t\t\t%18e ETH pubkey: %s, udid: %s", amount, logPubkey(pubkey), logUdid(udid));
+        console.log("ProcessWithdraw(): \t\t\t%18e ETH pubkey: %s, udid: %s", amount, pubkey.logPubkey(), udid.logUdid());
     }
 
     /// @notice Deactivate validators in the beacon chain.
@@ -479,7 +594,7 @@ abstract contract TargetFunctions is FuzzerBase {
         console.log(
             "DeactivateValidators(): \t\t deactivated %d validators: %s",
             counter,
-            arrayIntoString(deactivatedPubkeys, counter)
+            deactivatedPubkeys.arrayIntoString(counter)
         );
     }
 
@@ -487,13 +602,13 @@ abstract contract TargetFunctions is FuzzerBase {
     // forge-lint: disable-next-line(mixed-case-function)
     function handler_simulateRewards() public {
         // Ensure there is at least one active validator.
-        vm.assume(beaconHelper.countValidatorWithStatus(BeaconChain.Status.ACTIVE) > 0);
+        vm.assume(beaconChain.countActiveValidator() > 0);
 
         // Main call: simulateRewards
         (bytes[] memory receivers, uint256 counter, uint256 amount) = beaconChain.simulateRewards();
 
         console.log(
-            "SimulateRewards(): \t\t\t %18e ETH rewards distributed to: %s", amount, arrayIntoString(receivers, counter)
+            "SimulateRewards(): \t\t\t %18e ETH rewards distributed to: %s", amount, receivers.arrayIntoString(counter)
         );
     }
 
@@ -503,30 +618,30 @@ abstract contract TargetFunctions is FuzzerBase {
     /// active validators, really low risk of overflow.
     // forge-lint: disable-next-line(mixed-case-function)
     function handler_slash(uint80 amount, uint8 index) public {
-        BeaconChain.Validator memory validator = beaconHelper.findValidatorWithStatus(BeaconChain.Status.ACTIVE, index);
+        BeaconChain.Validator memory validator = beaconChain.findActiveValidator(index);
 
         // Ensure at least one active validator.
-        vm.assume(!validator.pubkey.eq(abi.encodePacked(NOT_FOUND)));
+        vm.assume(!validator.pubkey.eq(LibConstant.NOT_FOUND_BYTES));
 
-        uint256 multiplicator = beaconChain.SLASHING_PENALTY_MULTIPLICATOR();
+        uint256 multiplicator = LibConstant.SLASHING_PENALTY_MULTIPLICATOR;
         amount =
             _bound(amount, validator.amount.mulWad(multiplicator), validator.amount.mulWad(multiplicator * 1000)).toUint80();
 
         // Main call: slash
         beaconChain.slash(validator.pubkey, amount);
 
-        console.log("Slash():    \t\t\t\t %18e ETH - pubkey: %s", amount, logPubkey(validator.pubkey));
+        console.log("Slash():    \t\t\t\t %18e ETH - pubkey: %s", amount, validator.pubkey.logPubkey());
     }
 
     ////////////////////////////////////////////////////
     /// --- SYSTEM HANDLERS
     ////////////////////////////////////////////////////
     /// @notice Simulate a time jump in the system.
-    /// @param random Index used to reduce the probability of this function being called. Not limited because used for
-    /// randomness.
     /// @param secondsToJump Number of seconds to jump, limited to uint32 to avoid too big jumps.
     // forge-lint: disable-next-line(mixed-case-function)
-    function handler_timejump(uint256 random, uint32 secondsToJump) public probability(random, 10) {
+    function handler_timejump(
+        uint32 secondsToJump
+    ) public {
         // Minimum jump of 12 seconds to ensure we replicate execution block time.
         secondsToJump = _bound(secondsToJump, 12, 1 days).toUint32();
         skip(secondsToJump);
