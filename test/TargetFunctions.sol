@@ -218,17 +218,38 @@ abstract contract TargetFunctions is Setup {
         }
         bytes32 pubkeyHash = pubkey.hashPubkey();
 
+        // Get the owner from the beacon chain instead of the strategy every time. This allow to simulate the case
+        // frontrunning.
+        address withdrawalAddress;
+        BeaconChain.Validator[] memory beaconValidators = beaconChain.getValidators();
+        for (uint256 i = 0; i < beaconValidators.length; i++) {
+            if (beaconValidators[i].pubkey.eq(pubkey)) {
+                // Ensure the owner is the strategy.
+                withdrawalAddress = beaconValidators[i].owner;
+                break;
+            }
+        }
+        // It should never happen, but just in case.
+        require(withdrawalAddress != address(0), "VerifyValidator(): Validator not found on beacon chain");
+
         // Main call: verifyValidator
         strategy.verifyValidator({
             nextBlockTimestamp: 0,
             validatorIndex: pubkey.getIndexFromPubkey(),
             pubKeyHash: pubkeyHash,
-            withdrawalAddress: address(strategy),
+            withdrawalAddress: withdrawalAddress,
             validatorPubKeyProof: bytes("")
         });
 
+        // If the withdrawal address is not the strategy, it means the verification was frontrun.
+        if (withdrawalAddress != address(strategy)) frontrunned = true;
+
         // Log the verification.
-        console.log("VerifyValidator(): \t\t\t", pubkey.logPubkey());
+        console.log(
+            "VerifyValidator(): \t\t\t %s - frontrunned: %s",
+            pubkey.logPubkey(),
+            withdrawalAddress != address(strategy) ? "yes" : "no"
+        );
     }
 
     /// @notice Verify a deposit.
@@ -296,12 +317,11 @@ abstract contract TargetFunctions is Setup {
 
         // It is only possible to verifyBalances if there is a deposit processed on beacon chain, but not verifier on the
         // strategy.
-        // This is a temporary fix, as I assume this will not works once we will implement withdraw (especially with deposit
-        // to an exited validator. This assume that only the strategy can process deposits.
-        uint256 pendingDeposits = strategy.depositListLength();
-        vm.assume(pendingDeposits == beaconChain.getDepositQueueLength());
+        // Ensure that all the pending deposit on the strategy are pending on the beacon chain too.
+        vm.assume(strategy.ensureAllPendingDepositAreStillPendingOnBeaconChain(beaconChain));
 
         // Get sizes for arrays.
+        uint256 pendingDeposits = strategy.depositListLength();
         uint256 validValidators = strategy.verifiedValidatorsLength();
 
         // Main call: verifyBalances
@@ -378,6 +398,97 @@ abstract contract TargetFunctions is Setup {
 
         // Log the withdrawal.
         console.log("Withdraw():  \t\t\t\t%18e", amount, "ETH");
+    }
+
+    /// @notice Simulate a deposit on the beacon chain to frontrun the strategy stakeEth.
+    /// @dev    Calling first directly the deposit contract to simulate the frontrun, then calling stakeEth on the strategy.
+    /// @param index Index in the list of registered SSV validators to use for the staking, limited to uint8 because we
+    /// should have more than 255 ssv validators registered, really low risk of overflow.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_frontrunDeposit(
+        uint8 index
+    ) public {
+        // Bound the amount to stake to a maximum of 3k ETH.
+        uint256 balanceInGwei = weth.balanceOf(address(strategy)) / 1 gwei;
+
+        // Some assertions to ensure the staking can be done.
+        vm.assume(balanceInGwei >= 1 gwei); // Ensure there is at least 1 gwei to stake.
+        vm.assume(!strategy.firstDeposit()); // Ensure not 2 deposits for 2 different validators that are not verified.
+        vm.assume(strategy.depositListLength() < LibConstant.MAX_DEPOSITS); // Ensure we don't exceed max deposits.
+        vm.assume(strategy.verifiedValidatorsLength() + 1 < LibConstant.MAX_VERIFIED_VALIDATORS);
+
+        CompoundingValidatorManager.ValidatorState[] memory expectedStatus =
+            new CompoundingValidatorManager.ValidatorState[](1);
+        expectedStatus[0] = CompoundingValidatorManager.ValidatorState.REGISTERED;
+        // Pick a random validator that have either REGISTERED, VERIFIED or ACTIVE status.
+        (bytes memory pubkey,) = strategy.validatorWithStatus(expectedStatus, validators, index);
+        // If no validator match the criteria, skip the staking.
+        if (pubkey.eq(LibConstant.NOT_FOUND_BYTES)) {
+            string("StakeEth(): \t\t\t\t all validators are already staked").logAssume();
+        }
+
+        // Simulate the frontrun by depositing directly on the beacon chain.
+        bytes32 frontrunPendingDepositRoot = beaconProofs.merkleizePendingDeposit(
+            pubkey.hashPubkey(),
+            abi.encodePacked(bytes1(0x02), bytes11(0), alice), // withdrawal credentials
+            uint64(1 gwei),
+            abi.encodePacked(depositContract.uniqueDepositId()), // signature
+            0 // slot
+        );
+        vm.startPrank(alice);
+        depositContract.deposit{ value: 1 ether }(
+            pubkey,
+            abi.encodePacked(bytes1(0x02), bytes11(0), alice),
+            abi.encodePacked(depositContract.uniqueDepositId()),
+            bytes32(0)
+        );
+        vm.stopPrank();
+
+        console.log(
+            "FrontrunDeposit(): \t\t\t%18e ETH to: %s udid: %s",
+            1 ether,
+            pubkey.logPubkey(),
+            frontrunPendingDepositRoot.logUdid()
+        );
+
+        // Do the normal stakeEth on the strategy.
+        bytes32 pendingDepositRoot = beaconProofs.merkleizePendingDeposit(
+            pubkey.hashPubkey(),
+            abi.encodePacked(bytes1(0x02), bytes11(0), alice), // withdrawal credentials
+            uint64(1 gwei),
+            abi.encodePacked(depositContract.uniqueDepositId()), // signature
+            0 // slot
+        );
+        // Main call: stakeEth
+        vm.startPrank(operator);
+        strategy.stakeEth({
+            validatorStakeData: CompoundingValidatorManager.ValidatorStakeData({
+                pubkey: pubkey,
+                signature: abi.encodePacked(depositContract.uniqueDepositId()),
+                depositDataRoot: bytes32(0)
+            }),
+            depositAmountGwei: 1 gwei
+        });
+        vm.stopPrank();
+
+        // Log the staking.
+        console.log(
+            "StakeEth(): \t\t\t\t%18e",
+            1 ether,
+            string("ETH to: ").concat(pubkey.logPubkey()).concat(" udid: ").concat(pendingDepositRoot.logUdid())
+        );
+    }
+
+    /// @notice Reset the firstDeposit flag on the strategy.
+    /// @dev    This function can only be called if the firstDeposit flag is true and if the last verifyValidator was
+    /// frontrunned. This function is used to be able to call stakeEth again after a frontrun.
+    // forge-lint: disable-next-line(mixed-case-function)
+    function handler_resetFirstDeposit() public {
+        vm.assume(strategy.firstDeposit() && frontrunned); // Ensure firstDeposit is true.
+        frontrunned = false;
+        vm.prank(governor);
+        strategy.resetFirstDeposit();
+        console.log("ResetFirstDeposit(): \t\t\t firstDeposit reset");
     }
 
     ////////////////////////////////////////////////////

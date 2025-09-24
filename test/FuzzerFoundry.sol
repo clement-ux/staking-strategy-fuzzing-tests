@@ -24,8 +24,8 @@ contract FuzzerFoundry is Properties {
         targetContract(address(this));
 
         // Add selectors
-        bytes4[] memory selectors = new bytes4[](18);
 
+        bytes4[] memory selectors = new bytes4[](20);
         // Strategy handlers
         selectors[0] = this.handler_deposit.selector;
         selectors[1] = this.handler_withdraw.selector;
@@ -36,19 +36,21 @@ contract FuzzerFoundry is Properties {
         selectors[6] = this.handler_registerSsvValidator.selector;
         selectors[7] = this.handler_validatorWithdrawal.selector;
         selectors[8] = this.handler_removeSsvValidator.selector;
+        selectors[9] = this.handler_frontrunDeposit.selector;
+        selectors[10] = this.handler_resetFirstDeposit.selector;
 
         // Beacon chain handlers
-        selectors[9] = this.handler_processDeposit.selector;
-        selectors[10] = this.handler_processWithdraw.selector;
-        selectors[11] = this.handler_processSweep.selector;
-        selectors[12] = this.handler_activateValidators.selector;
-        selectors[13] = this.handler_deactivateValidators.selector;
-        selectors[14] = this.handler_snapBalances.selector;
-        selectors[15] = this.handler_simulateRewards.selector;
-        selectors[16] = this.handler_slash.selector;
+        selectors[11] = this.handler_processDeposit.selector;
+        selectors[12] = this.handler_processWithdraw.selector;
+        selectors[13] = this.handler_processSweep.selector;
+        selectors[14] = this.handler_activateValidators.selector;
+        selectors[15] = this.handler_deactivateValidators.selector;
+        selectors[16] = this.handler_snapBalances.selector;
+        selectors[17] = this.handler_simulateRewards.selector;
+        selectors[18] = this.handler_slash.selector;
 
         // System handlers
-        selectors[17] = this.handler_timejump.selector;
+        selectors[19] = this.handler_timejump.selector;
 
         // Target selectors
         targetSelector(FuzzSelector({ addr: address(this), selectors: selectors }));

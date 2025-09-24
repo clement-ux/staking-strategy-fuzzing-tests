@@ -182,4 +182,20 @@ library LibStrategy {
 
         return (LibConstant.NOT_FOUND_BYTES32, LibConstant.NOT_FOUND_BYTES32, 0);
     }
+
+    /// @notice Ensures that all pending deposits in the strategy are still pending in the beacon chain.
+    /// @param strategy The strategy contract to query.
+    /// @param beaconChain The beacon chain contract to query.
+    /// @return True if all pending deposits in the strategy are still pending in the beacon chain, false otherwise.
+    function ensureAllPendingDepositAreStillPendingOnBeaconChain(
+        CompoundingStakingSSVStrategy strategy,
+        BeaconChain beaconChain
+    ) public view returns (bool) {
+        // Browse through all pending deposits, ensure they are still pending in the beacon chain
+        uint256 depositsCount = strategy.depositListLength();
+        for (uint256 i = 0; i < depositsCount; i++) {
+            if (beaconChain.processedDeposits(strategy.depositList(i)) != BeaconChain.DepositStatus.PENDING) return false;
+        }
+        return true;
+    }
 }

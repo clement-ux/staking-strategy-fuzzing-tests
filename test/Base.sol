@@ -39,6 +39,7 @@ contract Base is Test {
     address public operator = makeAddr("operator");
 
     // Validators
+    bool public frontrunned;
     bytes[] public validators;
     mapping(bytes32 pubkeyHash => bytes pubkey) public hashToPubkey;
 
