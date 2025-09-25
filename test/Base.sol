@@ -47,6 +47,14 @@ contract Base is Test {
     address public oethVault = makeAddr("oethVault");
     Cluster public emptyCluster = Cluster(0, 0, 0, false, 0);
 
+    // Ghost variables
+    uint256 public sumOfRewards;
+    uint256 public sumOfSlashed;
+    uint256 public sumOfNonAccountedSlashed;
+    uint256 public sumOfDeposit;
+    uint256 public sumOfWithdraw;
+    uint256 public sumOfFrontrun;
+
     ////////////////////////////////////////////////////
     /// --- CONTRACTS & MOCKS
     ////////////////////////////////////////////////////

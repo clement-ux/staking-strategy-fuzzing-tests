@@ -69,4 +69,9 @@ contract FuzzerFoundry is Properties {
         assertTrue(propertyC(), "Invariant C failed");
         assertTrue(propertyD(), "Invariant D failed");
     }
+
+    function invariantE() public view {
+        assertTrue(propertyE(), "Invariant E failed");
+        assertTrue(propertyF(), "Invariant F failed");
+    }
 }

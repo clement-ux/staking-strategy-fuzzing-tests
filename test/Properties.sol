@@ -5,6 +5,8 @@ pragma solidity 0.8.29;
 import { TargetFunctions } from "test/TargetFunctions.sol";
 
 // Helpers
+import { console } from "@forge-std/console.sol";
+import { LibMath } from "test/libraries/LibMath.sol";
 import { LibLogger } from "test/libraries/LibLogger.sol";
 import { LibBeacon } from "test/libraries/LibBeacon.sol";
 import { LibStrategy } from "test/libraries/LibStrategy.sol";
@@ -36,6 +38,7 @@ abstract contract Properties is TargetFunctions {
     // [x] Property C: There can not be more than 12 unprocessed deposits
     // [x] Property D: There shouldn’t be more than 48 verified validators.
 
+    using LibMath for uint256;
     using LibLogger for bytes;
     using LibLogger for string;
     using LibLogger for bytes[];
@@ -80,5 +83,34 @@ abstract contract Properties is TargetFunctions {
 
     function propertyD() public view returns (bool) {
         return strategy.verifiedValidatorsLength() <= LibConstant.MAX_VERIFIED_VALIDATORS;
+    }
+
+    function propertyE() public view returns (bool) {
+        uint256 balance = strategy.checkBalance(address(weth));
+        console.log("\n=== Invariant E ===");
+        console.log("Balance:                           %18e", balance);
+        console.log("Sum of deposits:                   %18e", sumOfDeposit);
+        console.log("Sum of withdrawals:                %18e", sumOfWithdraw);
+        console.log("Sum of slashed:                    %18e", sumOfSlashed);
+        console.log("Sum of frontrun:                   %18e", sumOfFrontrun);
+        uint256 local = sumOfDeposit - sumOfWithdraw - sumOfSlashed - sumOfFrontrun;
+        console.log("Sum of local:                      %18e", local);
+        console.log("Diff between expected and actual   %18e", balance.diffAbs(local));
+        return balance >= local || balance.approxEqAbs(local, 1e12);
+    }
+
+    function propertyF() public view returns (bool) {
+        uint256 balance = strategy.checkBalance(address(weth));
+        console.log("\n=== Invariant F ===");
+        console.log("Balance:                           %18e", balance);
+        console.log("Sum of deposits:                   %18e", sumOfDeposit);
+        console.log("Sum of withdrawals:                %18e", sumOfWithdraw);
+        console.log("Sum of rewards:                    %18e", sumOfRewards);
+        console.log("Sum of slashed:                    %18e", sumOfSlashed);
+        console.log("Sum of frontrun:                   %18e", sumOfFrontrun);
+        uint256 local = sumOfDeposit + sumOfRewards - sumOfWithdraw - sumOfFrontrun;
+        console.log("Sum of local:                      %18e", local);
+        console.log("Diff between expected and actual   %18e", balance.diffAbs(local));
+        return balance <= local;
     }
 }

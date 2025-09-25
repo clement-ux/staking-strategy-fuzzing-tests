@@ -40,4 +40,8 @@ library LibMath {
         uint256 relDeltaBps = absDelta.divWad(a < b ? a : b);
         return relDeltaBps <= e;
     }
+
+    function diffAbs(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a - b : b - a;
+    }
 }

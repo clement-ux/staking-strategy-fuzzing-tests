@@ -100,6 +100,9 @@ abstract contract TargetFunctions is Setup {
 
         // Log the deposit.
         console.log("Deposit():   \t\t\t\t%18e", amount, "ETH");
+
+        // Update ghost variable.
+        sumOfDeposit += amount;
     }
 
     /// @notice Register a SSV validator.
@@ -242,7 +245,11 @@ abstract contract TargetFunctions is Setup {
         });
 
         // If the withdrawal address is not the strategy, it means the verification was frontrun.
-        if (withdrawalAddress != address(strategy)) frontrunned = true;
+        if (withdrawalAddress != address(strategy)) {
+            frontrunned = true;
+            // Update ghost variable.
+            sumOfFrontrun += 1 ether;
+        }
 
         // Log the verification.
         console.log(
@@ -338,6 +345,10 @@ abstract contract TargetFunctions is Setup {
 
         // Log the verification.
         console.log("VerifyBalances(): \t\t\t%18e ETH", strategy.lastVerifiedEthBalance());
+
+        // Update ghost variable.
+        sumOfSlashed += sumOfNonAccountedSlashed;
+        sumOfNonAccountedSlashed = 0;
     }
 
     /// @notice Withdraw from a validator.
@@ -394,6 +405,9 @@ abstract contract TargetFunctions is Setup {
 
         // Log the withdrawal.
         console.log("Withdraw():  \t\t\t\t%18e", amount, "ETH");
+
+        // Update ghost variable.
+        sumOfWithdraw += amount;
     }
 
     /// @notice Simulate a deposit on the beacon chain to frontrun the strategy stakeEth.
@@ -606,7 +620,9 @@ abstract contract TargetFunctions is Setup {
         console.log(
             "SimulateRewards(): \t\t\t %18e ETH rewards distributed to: %s", amount, receivers.arrayIntoString(counter)
         );
-        if (beaconChain.countActiveValidator() > 4) revert();
+
+        // Update ghost variable.
+        sumOfRewards += amount;
     }
 
     /// @notice Slash a validator in the beacon chain.
@@ -628,6 +644,9 @@ abstract contract TargetFunctions is Setup {
         beaconChain.slash(validator.pubkey, amount);
 
         console.log("Slash():    \t\t\t\t %18e ETH - pubkey: %s", amount, validator.pubkey.logPubkey());
+
+        // Update ghost variable.
+        sumOfNonAccountedSlashed += amount;
     }
 
     ////////////////////////////////////////////////////
