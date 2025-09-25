@@ -64,6 +64,7 @@ contract BeaconChain {
 
     uint256 public withdrawCounter; // counter to track number of withdraw processed
 
+    mapping(bytes pubkey => uint256 lastSnapBalance) public lastSnap; // mapping of last snapshotted balance per validator
     mapping(bytes pubkey => bool registered) public ssvRegisteredValidators; // mapping of SSV registered validators
     mapping(bytes32 id => DepositStatus processed) public processedDeposits; // to help tracking processed deposits
 
@@ -508,6 +509,12 @@ contract BeaconChain {
         validator.status = Status.EXITED;
         emit BeaconChain___ValidatorSlashed(pubkey, amount);
         emit BeaconChain___StatusChanged(pubkey, validator.amount, Status.ACTIVE, Status.EXITED);
+    }
+
+    function snapBalance() public {
+        for (uint256 i = 0; i < validators.length; i++) {
+            lastSnap[validators[i].pubkey] = validators[i].amount;
+        }
     }
 
     /// @notice Returns the protocol fee (not implemented).

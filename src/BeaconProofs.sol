@@ -107,13 +107,15 @@ contract BeaconProofs {
         bytes memory pubkey = validatorIndex.toUint16().createPubkey();
 
         // Get validator index in the `validators` array of the BeaconChain
-        uint256 validatorArrayIndex = beaconChain.getValidatorIndex(pubkey);
+        //uint256 validatorArrayIndex = beaconChain.getValidatorIndex(pubkey);
 
         // Get the validator from the BeaconChain
-        BeaconChain.Validator memory validator = beaconChain.getValidator(validatorArrayIndex);
+        //BeaconChain.Validator memory validator = beaconChain.getValidator(validatorArrayIndex);
 
         // Get the balance from the validator
-        uint256 balance = validator.amount;
+        //uint256 balance = validator.amount;
+
+        uint256 balance = beaconChain.lastSnap(pubkey);
 
         // Return the balance in gwei
         return balance / 1 gwei;

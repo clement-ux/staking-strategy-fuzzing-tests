@@ -268,7 +268,7 @@ abstract contract TargetFunctions is Setup {
 
         (, uint64 snapTimestamp,) = strategy.snappedBalance();
         uint64 depositProcessedSlot = slot + 1;
-        vm.assume(snapTimestamp == 0 || depositProcessedSlot.calcNextBlockTimestamp() <= snapTimestamp);
+        vm.assume(snapTimestamp == 0);
         // Main call: verifyDeposit
         strategy.verifyDeposit({
             pendingDepositRoot: pendingDepositRoot,
@@ -296,6 +296,7 @@ abstract contract TargetFunctions is Setup {
 
         // Main call: snapBalances
         strategy.snapBalances();
+        beaconChain.snapBalance();
 
         // Log the snap.
         console.log("SnapBalances(): \t\t\ttimestamp:", block.timestamp);
