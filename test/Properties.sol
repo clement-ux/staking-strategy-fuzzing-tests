@@ -99,7 +99,7 @@ abstract contract Properties is TargetFunctions {
         int256 local =
             sumOfDeposit.toInt256() - sumOfWithdraw.toInt256() - sumOfSlashed.toInt256() - sumOfFrontrun.toInt256();
         console.log("Sum of local:                      %18e", local);
-        return local > 0 || balance >= local.abs() || balance.approxEqAbs(local.abs(), 1e12);
+        return local < 0 || balance >= local.abs() || balance.approxEqAbs(local.abs(), 1e12);
     }
 
     function propertyF() public view returns (bool) {
