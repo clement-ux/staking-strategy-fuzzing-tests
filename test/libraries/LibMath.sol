@@ -44,4 +44,10 @@ library LibMath {
     function diffAbs(uint256 a, uint256 b) internal pure returns (uint256) {
         return a > b ? a - b : b - a;
     }
+
+    function abs(
+        int256 a
+    ) internal pure returns (uint256) {
+        return a >= 0 ? uint256(a) : uint256(-a);
+    }
 }

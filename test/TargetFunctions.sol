@@ -59,6 +59,7 @@ abstract contract TargetFunctions is Setup {
 
     using LibBytes for bytes;
     using LibLogger for bytes;
+    using LibLogger for uint256;
     using LibLogger for string;
     using LibLogger for bytes[];
     using LibLogger for bytes32;
@@ -249,6 +250,7 @@ abstract contract TargetFunctions is Setup {
             frontrunned = true;
             // Update ghost variable.
             sumOfFrontrun += 1 ether;
+            validatorFrontrunned[pubkey] = true;
         }
 
         // Log the verification.
@@ -663,5 +665,192 @@ abstract contract TargetFunctions is Setup {
         skip(secondsToJump);
 
         console.log("Timejump(): \t\t\t\t jumped %d seconds to %d", secondsToJump, block.timestamp);
+    }
+
+    ////////////////////////////////////////////////////
+    /// --- SYSTEM HANDLERS
+    ////////////////////////////////////////////////////
+    function _afterInvariant() internal {
+        console.log("\n=== After invariant ===");
+
+        console.log("\nManage beacon chain:");
+        processDepositAndWithdraw();
+        activateAndDeactivateValidators();
+        processDepositAndWithdraw();
+        beaconChain.processSweep();
+
+        // 6. Verify all validators that can be verified on the strategy.
+        console.log("\nManage strategy:");
+        verifyLastValidators();
+        forceSnapBalanceTo0();
+        verifyLastDeposits();
+
+        logValidators();
+
+        verifyBalance();
+    }
+
+    function logValidators() public view {
+        uint256 len = validators.length;
+        for (uint256 i; i < len; i++) {
+            // Get validator status on the beacon chain.
+            uint256 index = beaconChain.getValidatorIndex(validators[i]);
+            if (index != LibConstant.NOT_FOUND) {
+                BeaconChain.Validator memory beaconValidator = beaconChain.getValidator(index);
+                (CompoundingValidatorManager.ValidatorState state,) = strategy.validator(validators[i].hashPubkey());
+
+                string memory statusBeaconChain = LibLogger.logValidatorStatusBeaconChain(beaconValidator.status);
+                string memory statusStrategy = validatorFrontrunned[validators[i]]
+                    ? string("FRONTRUNNED-").concat(LibLogger.logValidatorStatusStrategy(state))
+                    : LibLogger.logValidatorStatusStrategy(state);
+                string memory status_ =
+                    string("BeaconChain: ").concat(statusBeaconChain).concat(" | Strategy: ").concat(statusStrategy);
+                console.log(
+                    "Validator: %s - %s - amount: %18e ETH", validators[i].logPubkey(), status_, beaconValidator.amount
+                );
+            }
+        }
+    }
+
+    function processDepositAndWithdraw() public {
+        // 1. Process all withdraw
+        console.log("Pending withdraws: %d", beaconChain.getWithdrawQueueLength());
+        beaconChain.processWithdraw(type(uint256).max);
+
+        // 2. Process all deposits
+        console.log("Pending deposits: %d", beaconChain.getDepositQueueLength());
+        beaconChain.processDeposit(type(uint256).max);
+    }
+
+    function activateAndDeactivateValidators() public {
+        // 3. Activate and deactivate all validators
+        (bytes[] memory activatedPubkeys, uint256 activated) = beaconChain.activateValidators(type(uint256).max);
+        console.log("Activated %d validators: %s", activated, activatedPubkeys.arrayIntoString(activated));
+
+        (bytes[] memory deactivatedPubkeys, uint256 deactivated) = beaconChain.deactivateValidators();
+        console.log("Deactivated %d validators: %s", deactivated, deactivatedPubkeys.arrayIntoString(deactivated));
+    }
+
+    function forceSnapBalanceTo0() public {
+        // 4. Force snapBalance to 0
+        // Give 1 wei to alice and vault will withdraw 1 wei to alice.
+        deal(alice, 1);
+        vm.prank(alice);
+        (bool success,) = address(strategy).call{ value: 1 }("");
+        require(success, "Failed to send 1 wei to strategy");
+        vm.prank(oethVault);
+        strategy.withdraw(alice, address(weth), 1);
+        (, uint64 ts,) = strategy.snappedBalance();
+        require(ts == 0, "Snap balance should be 0");
+    }
+
+    function verifyLastValidators() public {
+        uint256 len = validators.length;
+        uint256 counter;
+        for (uint256 i; i < len; i++) {
+            bytes memory pubkey = validators[i];
+            (CompoundingValidatorManager.ValidatorState state,) = strategy.validator(pubkey.hashPubkey());
+
+            // If the validator is STAKED on the strategy
+            if (state == CompoundingValidatorManager.ValidatorState.STAKED) {
+                BeaconChain.Validator[] memory beaconValidators = beaconChain.getValidators();
+
+                // Check if the deposit has been frontunned.
+                address withdrawalAddress;
+                for (uint256 j = 0; j < beaconValidators.length; j++) {
+                    if (beaconValidators[j].pubkey.eq(pubkey)) {
+                        // Ensure the owner is the strategy.
+                        withdrawalAddress = beaconValidators[j].owner;
+                        break;
+                    }
+                }
+
+                // Main call: verifyValidator
+                strategy.verifyValidator({
+                    nextBlockTimestamp: 0,
+                    validatorIndex: pubkey.getIndexFromPubkey(),
+                    pubKeyHash: pubkey.hashPubkey(),
+                    withdrawalCredentials: bytes32(abi.encodePacked(bytes1(0x02), bytes11(0), withdrawalAddress)),
+                    validatorPubKeyProof: bytes("")
+                });
+
+                // If the withdrawal address is not the strategy, it means the verification was frontrun.
+                if (withdrawalAddress != address(strategy)) {
+                    frontrunned = true;
+                    // Update ghost variable.
+                    sumOfFrontrun += 1 ether;
+                    validatorFrontrunned[pubkey] = true;
+                }
+
+                // Log the verification.
+                console.log(
+                    "VerifyValidator(): \t\t\t %s - frontrunned: %s",
+                    pubkey.logPubkey(),
+                    withdrawalAddress != address(strategy) ? "yes" : "no"
+                );
+                counter++;
+            }
+        }
+        console.log("Total verified validators: %d", counter);
+    }
+
+    function verifyLastDeposits() public {
+        uint256 len = strategy.depositListLength();
+        uint256 counter;
+
+        for (uint256 i; i < len; i++) {
+            bytes32 pendingDepositRoot = strategy.depositList(0);
+            (bytes32 pubKeyHash,, uint64 slot,,) = strategy.deposits(pendingDepositRoot);
+
+            uint64 depositProcessedSlot = slot + 1;
+            // Main call: verifyDeposit
+            strategy.verifyDeposit({
+                pendingDepositRoot: pendingDepositRoot,
+                depositProcessedSlot: depositProcessedSlot,
+                firstPendingDeposit: CompoundingValidatorManager.FirstPendingDepositSlotProofData({ slot: 1, proof: bytes("") }),
+                strategyValidatorData: CompoundingValidatorManager.StrategyValidatorProofData({
+                    withdrawableEpoch: type(uint64).max,
+                    withdrawableEpochProof: abi.encodePacked(pendingDepositRoot)
+                })
+            });
+            // Log the verification.
+            console.log(
+                "VerifyDeposit(): \t\t\t",
+                (hashToPubkey[pubKeyHash]).logPubkey(),
+                " - udid: ",
+                (pendingDepositRoot).logUdid()
+            );
+            counter++;
+        }
+        console.log("Total verified deposits: %d", counter);
+    }
+
+    function verifyBalance() public {
+        skip(1 days);
+        strategy.snapBalances();
+        beaconChain.snapBalance();
+        // Get sizes for arrays.
+        uint256 pendingDeposits = strategy.depositListLength();
+        uint256 validValidators = strategy.verifiedValidatorsLength();
+
+        // Main call: verifyBalances
+        strategy.verifyBalances({
+            balanceProofs: CompoundingValidatorManager.BalanceProofs({
+                balancesContainerRoot: bytes32(0),
+                balancesContainerProof: bytes(""),
+                validatorBalanceLeaves: new bytes32[](validValidators),
+                validatorBalanceProofs: new bytes[](validValidators)
+            }),
+            pendingDepositProofs: CompoundingValidatorManager.PendingDepositProofs({
+                pendingDepositContainerRoot: bytes32(0),
+                pendingDepositContainerProof: bytes(""),
+                pendingDepositIndexes: new uint32[](pendingDeposits),
+                pendingDepositProofs: new bytes[](pendingDeposits)
+            })
+        });
+        console.log("VerifyBalances(): \t\t\t%18e ETH", strategy.lastVerifiedEthBalance());
+
+        sumOfSlashed += sumOfNonAccountedSlashed;
+        sumOfNonAccountedSlashed = 0;
     }
 }

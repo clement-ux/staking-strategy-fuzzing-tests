@@ -6,6 +6,12 @@ import { Vm } from "@forge-std/Vm.sol";
 import { console } from "@forge-std/console.sol";
 import { LibString } from "@solady/utils/LibString.sol";
 
+// Beacon chain
+import { BeaconChain } from "src/BeaconChain.sol";
+
+// Target contracts
+import { CompoundingValidatorManager } from "@origin-dollar/strategies/NativeStaking/CompoundingStakingSSVStrategy.sol";
+
 library LibLogger {
     using LibString for string;
 
@@ -49,5 +55,31 @@ library LibLogger {
         bytes32 udid
     ) public pure returns (string memory) {
         return vm.toString(udid).slice(0, 6);
+    }
+
+    function logValidatorStatusBeaconChain(
+        BeaconChain.Status status
+    ) public pure returns (string memory) {
+        if (status == BeaconChain.Status.UNKNOWN) return "UNKNOWN";
+        if (status == BeaconChain.Status.DEPOSITED) return "DEPOSITED";
+        if (status == BeaconChain.Status.ACTIVE) return "ACTIVE";
+        if (status == BeaconChain.Status.EXITED) return "EXITED";
+        if (status == BeaconChain.Status.WITHDRAWABLE) return "WITHDRAWABLE";
+        return "INVALID_STATUS";
+    }
+
+    function logValidatorStatusStrategy(
+        CompoundingValidatorManager.ValidatorState status
+    ) public pure returns (string memory) {
+        if (status == CompoundingValidatorManager.ValidatorState.NON_REGISTERED) return "NON_REGISTERED";
+        if (status == CompoundingValidatorManager.ValidatorState.REGISTERED) return "REGISTERED";
+        if (status == CompoundingValidatorManager.ValidatorState.STAKED) return "STAKED";
+        if (status == CompoundingValidatorManager.ValidatorState.VERIFIED) return "VERIFIED";
+        if (status == CompoundingValidatorManager.ValidatorState.ACTIVE) return "ACTIVE";
+        if (status == CompoundingValidatorManager.ValidatorState.EXITING) return "EXITING";
+        if (status == CompoundingValidatorManager.ValidatorState.EXITED) return "EXITED";
+        if (status == CompoundingValidatorManager.ValidatorState.REMOVED) return "REMOVED";
+        if (status == CompoundingValidatorManager.ValidatorState.INVALID) return "INVALID";
+        return "UNKNOWN_STATUS";
     }
 }

@@ -41,6 +41,7 @@ contract Base is Test {
     // Validators
     bool public frontrunned;
     bytes[] public validators;
+    mapping(bytes pubkey => bool frontrunned) public validatorFrontrunned;
     mapping(bytes32 pubkeyHash => bytes pubkey) public hashToPubkey;
 
     // Mock
