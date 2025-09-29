@@ -5,7 +5,6 @@ pragma solidity 0.8.29;
 import { TargetFunctions } from "test/TargetFunctions.sol";
 
 // Helpers
-import { console } from "@forge-std/console.sol";
 import { LibMath } from "test/libraries/LibMath.sol";
 import { LibLogger } from "test/libraries/LibLogger.sol";
 import { LibBeacon } from "test/libraries/LibBeacon.sol";
@@ -90,46 +89,21 @@ abstract contract Properties is TargetFunctions {
 
     function propertyE() public view returns (bool) {
         uint256 balance = strategy.checkBalance(address(weth));
-        console.log("\n=== Invariant E ===");
-        console.log("Balance:                           %18e", balance);
-        console.log("Sum of deposits:                   %18e", sumOfDeposit);
-        console.log("Sum of withdrawals:                %18e", sumOfWithdraw);
-        console.log("Sum of slashed:                    %18e", sumOfSlashed);
-        console.log("Sum of frontrun:                   %18e", sumOfFrontrun);
         int256 local =
             sumOfDeposit.toInt256() - sumOfWithdraw.toInt256() - sumOfSlashed.toInt256() - sumOfFrontrun.toInt256();
-        console.log("Sum of local:                      %18e", local);
         return local < 0 || balance >= local.abs() || balance.approxEqAbs(local.abs(), 1e12);
     }
 
     function propertyF() public view returns (bool) {
         uint256 balance = strategy.checkBalance(address(weth));
-        console.log("\n=== Invariant F ===");
-        console.log("Balance:                           %18e", balance);
-        console.log("Sum of deposits:                   %18e", sumOfDeposit);
-        console.log("Sum of withdrawals:                %18e", sumOfWithdraw);
-        console.log("Sum of rewards:                    %18e", sumOfRewards);
-        console.log("Sum of slashed:                    %18e", sumOfSlashed);
-        console.log("Sum of frontrun:                   %18e", sumOfFrontrun);
         uint256 local = sumOfDeposit + sumOfRewards - sumOfWithdraw - sumOfFrontrun;
-        console.log("Sum of local:                      %18e", local);
-        console.log("Diff between expected and actual   %18e", balance.diffAbs(local));
         return balance <= local;
     }
 
     function afterInvariant() public {
         _afterInvariant();
         uint256 balance = strategy.checkBalance(address(weth));
-        console.log("\n=== Invariant F ===");
-        console.log("Balance:                           %18e", balance);
-        console.log("Sum of deposits:                   %18e", sumOfDeposit);
-        console.log("Sum of withdrawals:                %18e", sumOfWithdraw);
-        console.log("Sum of rewards:                    %18e", sumOfRewards);
-        console.log("Sum of slashed:                    %18e", sumOfSlashed);
-        console.log("Sum of frontrun:                   %18e", sumOfFrontrun);
         uint256 local = sumOfDeposit + sumOfRewards - sumOfWithdraw - sumOfSlashed - sumOfFrontrun;
-        console.log("Sum of local:                      %18e", local);
-        console.log("Diff between expected and actual   %18e", balance.diffAbs(local));
         assertTrue(balance.approxEqAbs(local, 1e12));
     }
 }

@@ -670,26 +670,34 @@ abstract contract TargetFunctions is Setup {
     ////////////////////////////////////////////////////
     /// --- SYSTEM HANDLERS
     ////////////////////////////////////////////////////
+    /// @notice Function called at the end of each invariant check.
+    /// @dev    This function will:
+    ///         1. Process all deposits and withdraws in the beacon chain.
+    ///         2. Activate and deactivate all validators in the beacon chain.
+    ///         3. Process again all deposits and withdraws in the beacon chain.
+    ///         4. Process a sweep in the beacon chain.
+    ///         5. Verify all validators that can be verified on the strategy.
+    ///         6. Force snapBalance to 0 by sending 1 wei to the strategy and withdrawing it.
+    ///         7. Verify all deposits that can be verified on the strategy.
+    ///         8. Verify the balances of the strategy.
+    // forge-lint: disable-next-line(mixed-case-function)
     function _afterInvariant() internal {
-        console.log("\n=== After invariant ===");
-
-        console.log("\nManage beacon chain:");
         processDepositAndWithdraw();
         activateAndDeactivateValidators();
         processDepositAndWithdraw();
         beaconChain.processSweep();
 
         // 6. Verify all validators that can be verified on the strategy.
-        console.log("\nManage strategy:");
         verifyLastValidators();
         forceSnapBalanceTo0();
         verifyLastDeposits();
 
-        logValidators();
+        //logValidators();
 
         verifyBalance();
     }
 
+    /// @notice Used to log all validators status on both the beacon chain and the strategy.
     function logValidators() public view {
         uint256 len = validators.length;
         for (uint256 i; i < len; i++) {
@@ -712,6 +720,7 @@ abstract contract TargetFunctions is Setup {
         }
     }
 
+    /// @notice Process all deposits and withdraws in the beacon chain.
     function processDepositAndWithdraw() public {
         // 1. Process all withdraw
         console.log("Pending withdraws: %d", beaconChain.getWithdrawQueueLength());
@@ -722,6 +731,7 @@ abstract contract TargetFunctions is Setup {
         beaconChain.processDeposit(type(uint256).max);
     }
 
+    /// @notice Activate and deactivate all validators in the beacon chain.
     function activateAndDeactivateValidators() public {
         // 3. Activate and deactivate all validators
         (bytes[] memory activatedPubkeys, uint256 activated) = beaconChain.activateValidators(type(uint256).max);
@@ -731,6 +741,7 @@ abstract contract TargetFunctions is Setup {
         console.log("Deactivated %d validators: %s", deactivated, deactivatedPubkeys.arrayIntoString(deactivated));
     }
 
+    /// @notice Force the snapBalance of the strategy to 0.
     function forceSnapBalanceTo0() public {
         // 4. Force snapBalance to 0
         // Give 1 wei to alice and vault will withdraw 1 wei to alice.
@@ -744,6 +755,7 @@ abstract contract TargetFunctions is Setup {
         require(ts == 0, "Snap balance should be 0");
     }
 
+    /// @notice Verify all validators that can be verified on the strategy.
     function verifyLastValidators() public {
         uint256 len = validators.length;
         uint256 counter;
@@ -794,6 +806,7 @@ abstract contract TargetFunctions is Setup {
         console.log("Total verified validators: %d", counter);
     }
 
+    /// @notice Verify all deposits that can be verified on the strategy.
     function verifyLastDeposits() public {
         uint256 len = strategy.depositListLength();
         uint256 counter;
@@ -825,6 +838,7 @@ abstract contract TargetFunctions is Setup {
         console.log("Total verified deposits: %d", counter);
     }
 
+    /// @notice Verify the balances of the strategy.
     function verifyBalance() public {
         skip(1 days);
         strategy.snapBalances();
