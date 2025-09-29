@@ -21,9 +21,23 @@ import { DepositContract } from "../src/DepositContract.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 
 // Utils
-import { ValidatorSet } from "../src/ValidatorSet.sol";
+import { LibConstant } from "./libraries/LibConstant.sol";
+import { LibValidator } from "./libraries/LibValidator.sol";
 
-contract Setup is Base, ValidatorSet {
+/// @title Setup
+/// @notice Abstract contract responsible for test environment initialization and contract deployment.
+/// @dev    This contract orchestrates the complete test setup process in a structured manner:
+///         1. Environment configuration (block timestamp, number)
+///         2. User address generation and role assignment
+///         3. External contract deployment (mocks, dependencies)
+///         4. Main contract deployment
+///         5. System initialization and configuration
+///         6. Address labeling for improved traceability
+///         No test logic should be implemented here, only setup procedures.
+contract Setup is Base {
+    using LibValidator for bytes;
+    using LibValidator for uint16;
+
     ////////////////////////////////////////////////////
     /// --- SETUP
     ////////////////////////////////////////////////////
@@ -32,7 +46,7 @@ contract Setup is Base, ValidatorSet {
         _setUpRealisticEnvironment();
 
         // 2. Create user
-        _createUsers();
+        _createUsersAndValidators();
 
         // To increase performance, we will not use fork., mocking contract instead.
         // 3. Deploy mocks.
@@ -59,9 +73,22 @@ contract Setup is Base, ValidatorSet {
     //////////////////////////////////////////////////////
     /// --- USERS
     //////////////////////////////////////////////////////
-    function _createUsers() private {
+    function _createUsersAndValidators() private {
+        // Fund users
         deal(address(alice), 1_000_000 ether);
         deal(address(bobby), 1_000_000 ether);
+
+        // Create validators and map pubkey hash to pubkey
+        for (uint16 i = 1; i <= LibConstant.MAX_VALIDATORS; i++) {
+            // Create a mock pubkey
+            bytes memory pubkey = i.createPubkey();
+
+            // Add to validators array
+            validators.push(pubkey);
+
+            // Map pubkey to hash to retrieve it later
+            hashToPubkey[pubkey.hashPubkey()] = pubkey;
+        }
     }
 
     //////////////////////////////////////////////////////
@@ -71,17 +98,17 @@ contract Setup is Base, ValidatorSet {
         // First deploy BeaconChain contract
         beaconChain = new BeaconChain();
 
-        // Then deploy BeaconProofs contract
+        // Then deploy proofs contract
         beaconProofs = new BeaconProofs(address(beaconChain));
         beaconChain.setBeaconProofs(address(beaconProofs));
 
         // Deploy DepositContract and PartialWithdrawContract to their respective addresses on mainnet
-        deployCodeTo("BeaconRoot.sol", abi.encode(), BEACON_ROOTS_ADDRESS);
-        deployCodeTo("DepositContract.sol", abi.encode(address(beaconChain)), DEPOSIT_CONTRACT_ADDRESS);
-        deployCodeTo("PartialWithdrawContract.sol", abi.encode(address(beaconChain)), WITHDRAWAL_REQUEST_ADDRESS);
-        beaconRoot = BeaconRoot(payable(BEACON_ROOTS_ADDRESS));
-        depositContract = DepositContract(payable(DEPOSIT_CONTRACT_ADDRESS));
-        partialWithdrawContract = PartialWithdrawContract(payable(WITHDRAWAL_REQUEST_ADDRESS));
+        deployCodeTo("BeaconRoot.sol", abi.encode(), LibConstant.BEACON_ROOTS_ADDRESS);
+        deployCodeTo("DepositContract.sol", abi.encode(address(beaconChain)), LibConstant.DEPOSIT_CONTRACT_ADDRESS);
+        deployCodeTo("PartialWithdrawContract.sol", abi.encode(address(beaconChain)), LibConstant.WITHDRAWAL_REQUEST_ADDRESS);
+        beaconRoot = BeaconRoot(payable(LibConstant.BEACON_ROOTS_ADDRESS));
+        depositContract = DepositContract(payable(LibConstant.DEPOSIT_CONTRACT_ADDRESS));
+        partialWithdrawContract = PartialWithdrawContract(payable(LibConstant.WITHDRAWAL_REQUEST_ADDRESS));
 
         // Then deploy SSVNetwork contract
         ssvNetwork = new SSVNetwork(address(beaconChain));
@@ -114,7 +141,7 @@ contract Setup is Base, ValidatorSet {
             address(ssvNetwork),
             address(depositContract),
             address(beaconProofs),
-            GENESIS_TIMESTAMP
+            LibConstant.GENESIS_TIMESTAMP
         );
 
         // ---

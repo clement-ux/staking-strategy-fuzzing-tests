@@ -21,15 +21,13 @@ import { DepositContract } from "../src/DepositContract.sol";
 import { RewardDistributor } from "../src/RewardDistributor.sol";
 import { PartialWithdrawContract } from "../src/PartialWithdrawContract.sol";
 
+/// @title Base
+/// @notice Abstract base contract defining shared state variables and contract instances for the test suite.
+/// @dev    This contract serves as the foundation for all test contracts, providing:
+///         - Contract instances (tokens, external dependencies)
+///         - Address definitions (users, governance, deployers)
+///         - No logic or setup should be included here, only state variable declarations
 contract Base is Test {
-    ////////////////////////////////////////////////////
-    /// --- CONSTANTS & IMMUTABLES
-    ////////////////////////////////////////////////////
-    uint64 public constant GENESIS_TIMESTAMP = 1_606_824_023;
-    address public constant BEACON_ROOTS_ADDRESS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
-    address public constant DEPOSIT_CONTRACT_ADDRESS = 0x00000000219ab540356cBB839Cbe05303d7705Fa;
-    address public constant WITHDRAWAL_REQUEST_ADDRESS = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
-
     ////////////////////////////////////////////////////
     /// --- STORAGE VARIABLES
     ////////////////////////////////////////////////////
@@ -40,10 +38,23 @@ contract Base is Test {
     address public governor = makeAddr("governor");
     address public operator = makeAddr("operator");
 
+    // Validators
+    bool public frontrunned;
+    bytes[] public validators;
+    mapping(bytes pubkey => bool frontrunned) public validatorFrontrunned;
+    mapping(bytes32 pubkeyHash => bytes pubkey) public hashToPubkey;
+
     // Mock
     address public oethVault = makeAddr("oethVault");
-
     Cluster public emptyCluster = Cluster(0, 0, 0, false, 0);
+
+    // Ghost variables
+    uint256 public sumOfRewards;
+    uint256 public sumOfSlashed;
+    uint256 public sumOfNonAccountedSlashed;
+    uint256 public sumOfDeposit;
+    uint256 public sumOfWithdraw;
+    uint256 public sumOfFrontrun;
 
     ////////////////////////////////////////////////////
     /// --- CONTRACTS & MOCKS

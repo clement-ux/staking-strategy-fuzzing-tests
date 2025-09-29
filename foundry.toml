@@ -6,8 +6,9 @@ verbosity = 3
 show_progress = true
 auto_detect_remappings = false
 ignored_warnings_from = ["dependencies/"]
-ignored_error_codes = [3628, 5574]
+ignored_error_codes = [3628, 3860, 5574]
 # code-size: 5574
+# init-code-size: 3860
 # missing-receive-ether: 3628
 
 remappings = [
@@ -38,19 +39,20 @@ single_line_statement_blocks = "single"
 runs = 256
 depth = 500
 show_metrics = true
-fail_on_revert = true
 call_override = false
+fail_on_revert = true
 include_storage = true
-shrink_run_limit = 5_000
+shrink_run_limit = 50_000
 dictionary_weight = 80
 include_push_bytes = true
+max_assume_rejects = 10_000
 
 
 [dependencies]
 forge-std = "1.9.7"
 solmate = "6.8.0"
 solady = "0.1.23"
-"origin-dollar" = { version = "1.0.0", git = "git@github.com:OriginProtocol/origin-dollar.git", rev = "546c47f2a2fa91acc2c72466476a149163dfa99b" }
+"origin-dollar" = { version = "1.0.0", git = "git@github.com:OriginProtocol/origin-dollar.git", rev = "0528675dcc0a2a6b773baf3d310b062a804bda7d" }
 "openzeppelin-contracts-4.4.2" = { version = "4.4.2", git = "git@github.com:OpenZeppelin/openzeppelin-contracts.git", rev = "b53c43242fc9c0e435b66178c3847c4a1b417cc1" }
 
 
