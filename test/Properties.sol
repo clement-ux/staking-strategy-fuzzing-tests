@@ -33,10 +33,25 @@ abstract contract Properties is TargetFunctions {
     // ║                         ✦✦✦ INVARIANT PROPERTIES ✦✦✦                         ║
     // ╚══════════════════════════════════════════════════════════════════════════════╝
     // [x] Property A: The validator mapping can only contain 1 validator with state ValidatorState.STAKED
-    // [ ] Property B: The amount of ETH in unprocessed deposits to STAKED validators (validators with unconfirmed withdrawal
+    // [x] Property B: The amount of ETH in unprocessed deposits to STAKED validators (validators with unconfirmed withdrawal
     //                  credentials) is never larger than 1 ETH
     // [x] Property C: There can not be more than 12 unprocessed deposits
     // [x] Property D: There shouldn’t be more than 48 verified validators.
+    // [x] Property E: The strategy’s WETH balance is always greater than or equal to the net deposits minus withdrawals
+    //                 minus slashed amounts minus frontrun amounts (with a small absolute margin of error of 1e12 wei).
+    //                 It is too complex to include rewards in this invariant, because of the following situation:
+    //                - A validator get slashed
+    //                - BeaconChain deactivate the validator and take the slashed amount from the strategy
+    //                - BeaconChain sweep the validator
+    //                In this situation this is really complex to calculate the exact amount of rewards the strategy have.
+    //                The amount of invariant accounting should be always underestimated. The amount of rewards we be
+    //                calculated in Property F and will be overestimated.
+    // [x] Property F: The strategy’s WETH balance is always less than or equal to the net deposits + rewards - withdrawals
+    //                 - frontrun amounts. This invariant is easier to calculate because we can overestimate the amount
+    //                 of rewards the strategy have.
+    // [x] After all invariant properties are checked, we do a final check that the strategy’s WETH balance is approximately
+    //     equal to net deposits + rewards - withdrawals - slashed amounts - frontrun amounts (with a small absolute margin
+    //     of error of 1e12 wei).
 
     using LibMath for int256;
     using LibMath for uint256;
